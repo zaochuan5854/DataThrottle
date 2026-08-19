@@ -36,7 +36,7 @@ data class MainUiState(
     val hasSecureSettingsPermission: Boolean = false,
     val hasNotificationPermission: Boolean = false,
     val isIgnoringBatteryOptimizations: Boolean = false,
-    val bandwidthLimitMbps: Float = 0.8f,
+    val bandwidthLimitMbps: Float = 1.0f,
     val isDiagnosticRunning: Boolean = false,
     val shizukuStatus: ShizukuStatus = ShizukuStatus.NOT_INSTALLED
 ) {
@@ -217,7 +217,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             toggleService(false)
             cancel100KbpsTest()
-            settingsRepository.setBandwidthLimitMbps(0.8f)
+            settingsRepository.setBandwidthLimitMbps(1.0f)
             bandwidthController.resetToDefault()
         }
     }

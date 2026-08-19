@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,7 +57,7 @@ fun DrumrollBandwidthPicker(
 
     val initialIndex = remember {
         val idx = items.indexOfFirst { kotlin.math.abs(it - currentLimit) < 0.05f }
-        if (idx >= 0) idx else 7
+        if (idx >= 0) idx else 9
     }
 
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
@@ -99,6 +101,7 @@ fun DrumrollBandwidthPicker(
                     .fillMaxSize()
                     .clipToBounds()
                     .testTag("bandwidth_picker_list")
+                    .semantics { contentDescription = "Bandwidth Picker" }
             ) {
                 itemsIndexed(items) { index, value ->
                     val layoutInfo = listState.layoutInfo
@@ -146,9 +149,9 @@ fun DrumrollBandwidthPicker(
                                 text = if (value < 1.0f) String.format("%.1f", value) else if (value % 1.0f == 0f) String.format("%.0f", value) else String.format("%.1f", value),
                                 style = MaterialTheme.typography.displayLarge.copy(
                                     fontWeight = FontWeight.Black,
-                                    fontSize = 85.sp,
+                                    fontSize = 90.sp,
                                     letterSpacing = (-2).sp,
-                                    lineHeight = 85.sp
+                                    lineHeight = 90.sp
                                 ),
                                 color = MaterialTheme.colorScheme.primary
                             )

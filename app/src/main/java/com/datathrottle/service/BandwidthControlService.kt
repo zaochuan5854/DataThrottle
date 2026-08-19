@@ -45,7 +45,7 @@ class BandwidthControlService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
 
     private var diagnosticLimit: Long? = null
-    private var currentLimitMbps: Float = 0.8f
+    private var currentLimitMbps: Float = 1.0f
     private var lastAppliedLimit: Long? = null
     private var lastAppliedType: NetworkType? = null
 
@@ -211,7 +211,7 @@ class BandwidthControlService : Service() {
     private fun createNotification(
         type: NetworkType,
         isDiagnostic: Boolean = false,
-        limitMbps: Float = 0.8f,
+        limitMbps: Float = 1.0f,
         shouldAlert: Boolean = false
     ): Notification {
         val contentIntent = PendingIntent.getActivity(
@@ -283,7 +283,7 @@ class BandwidthControlService : Service() {
     private fun updateNotification(
         type: NetworkType,
         isDiagnostic: Boolean = false,
-        limitMbps: Float = 0.8f,
+        limitMbps: Float = 1.0f,
         shouldAlert: Boolean = false
     ) {
         val notification = createNotification(type, isDiagnostic, limitMbps, shouldAlert)

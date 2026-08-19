@@ -31,7 +31,7 @@ class SettingsRepository(private val context: Context) {
         private val BANDWIDTH_LIMIT_MBPS = floatPreferencesKey("bandwidth_limit_mbps")
         private val APP_THEME = stringPreferencesKey("app_theme")
         private val SERVICE_ENABLED = booleanPreferencesKey("service_enabled")
-        private const val DEFAULT_LIMIT_MBPS = 0.8f // ~100 KB/s
+        private const val DEFAULT_LIMIT_MBPS = 1.0f // 1.0 Mbps (125 KB/s)
     }
 
     val bandwidthLimitMbps: Flow<Float> = context.dataStore.data
