@@ -31,10 +31,19 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      # Android SDK は ubuntu-latest に事前インストール済み。
+      # act（ローカルテスト）など SDK が無い環境でも動くよう明示的にセットアップする。
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
+          restore-keys: ${{ runner.os }}-gradle-
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
