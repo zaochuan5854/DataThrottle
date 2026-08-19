@@ -1,0 +1,116 @@
+<resources>
+    <string name="app_name">DataThrottle</string>
+    <string name="hero_subtitle">ギガを節約</string>
+
+    <!-- Notification Channels -->
+    <string name="notification_channel_service_name">帯域制御ステータス</string>
+    <string name="notification_channel_service_description">帯域制限およびネットワーク接続状態のリアルタイム通知</string>
+    <string name="notification_channel_alerts_name">警告・エラー通知</string>
+    <string name="notification_channel_alerts_description">重要な警告、権限エラー、テスト完了通知</string>
+
+    <!-- Notification Content & Actions -->
+    <string name="notification_title">DataThrottle 有効</string>
+    <string name="notification_title_cellular">DataThrottle: 制限中 (%.1f Mbps)</string>
+    <string name="notification_title_wifi">DataThrottle: 無制限 (Wi-Fi)</string>
+    <string name="notification_title_other">DataThrottle: 無制限</string>
+    <string name="notification_title_test">DataThrottle: 100 kbps テスト実行中</string>
+    <string name="notification_desc_cellular">モバイル通信を %1$.1f Mbps (%2$d kbps) に制限して通信量を節約しています。</string>
+    <string name="notification_desc_wifi">Wi-Fiに接続されています。制限なしで快適にご利用いただけます。</string>
+    <string name="notification_desc_test">100 kbps ストリーミング速度テストを実行中。</string>
+    <string name="notification_action_stop">停止</string>
+
+    <!-- Status & Home UI -->
+    <string name="status_cellular">モバイル通信</string>
+    <string name="status_wifi">Wi-Fi</string>
+    <string name="status_other">その他の接続</string>
+    <string name="status_none">未接続</string>
+    <string name="service_status_running">サービス: 実行中</string>
+    <string name="service_status_stopped">サービス: 停止中</string>
+    <string name="status_limited_to">Limited to %s</string>
+    <string name="status_unlimited">Unlimited</string>
+    <string name="status_unlimited_wifi">Unlimited (Wi-Fi)</string>
+    <string name="status_unlimited_disabled">Disabled</string>
+    <string name="status_desc_cellular">お使いのモバイル通信は\n%s に制限されています。</string>
+    <string name="status_desc_wifi">お使いのWi-Fi通信は\n無制限です。</string>
+    <string name="status_desc_disabled">お使いのインターネットは\n制限されていません。</string>
+    <string name="label_bandwidth_limit">Bandwidth Limit</string>
+    <string name="label_service_toggle">制御サービスを有効化</string>
+
+    <!-- Settings Screen -->
+    <string name="title_settings">設定</string>
+    <string name="settings_section_details">詳細</string>
+    <string name="settings_item_language">言語</string>
+    <string name="language_dialog_title">言語の選択</string>
+    <string name="language_system_default">システムデフォルト</string>
+    <string name="settings_item_theme">テーマ</string>
+    <string name="theme_dialog_title">テーマの選択</string>
+    <string name="theme_system_default">システムに従う</string>
+    <string name="theme_light">ライトモード</string>
+    <string name="theme_dark">ダークモード</string>
+    <string name="settings_item_test_title">100 kbps テスト</string>
+    <string name="settings_item_test_desc">速度制限（100 kbps）の動作確認とストリーミング検証</string>
+    <string name="settings_item_permission_title">WRITE_SECURE_SETTINGS 権限</string>
+    <string name="settings_item_permission_granted">権限取得済み（帯域制限可能）</string>
+    <string name="settings_item_permission_missing">未取得（ShizukuまたはADBで付与）</string>
+    <string name="settings_item_reset_title">設定リセット・アンインストール準備</string>
+    <string name="settings_item_reset_desc">帯域制限設定をOS初期状態に復元してリセット</string>
+    <string name="settings_item_legal">法的事項</string>
+    <!-- Version is displayed dynamically via BuildConfig.VERSION_NAME in SettingsScreen -->
+
+    <!-- Reset Dialog -->
+    <string name="reset_dialog_title">設定リセット・アンインストール準備</string>
+    <string name="reset_dialog_desc">すべての帯域制限ルールを解除し、システムのネットワーク設定を元の状態に戻して常駐サービスを停止します。</string>
+    <string name="btn_confirm_reset">リセットを実行</string>
+    <string name="btn_cancel">キャンセル</string>
+    <string name="btn_safety_reset">設定リセット・初期化</string>
+    <string name="reset_warning">すべての設定を解除し、サービスを停止します。</string>
+
+    <!-- Test UI -->
+    <string name="nav_test">100 kbps テスト</string>
+    <string name="test_card_title">100 kbps スキャンライン テスト</string>
+    <string name="btn_start_test">100 kbps テストを開始</string>
+    <string name="btn_cancel_test">テストを中止</string>
+    <string name="test_running">100 kbps でストリーミング中...</string>
+    <string name="test_speed_format">速度: %.0f kbps</string>
+    <string name="test_report_title">テスト完了</string>
+    <string name="test_report_speed">平均速度: %.0f kbps</string>
+    <string name="test_report_status">ステータス: 帯域制限の動作確認完了（合格）</string>
+    <string name="test_error_title">テストエラー</string>
+    <string name="test_error_message">ネットワークからテストデータの取得に失敗しました。接続状況をご確認ください。</string>
+    <string name="btn_close">閉じる</string>
+
+    <!-- Permission Setup Screen & Guidance -->
+    <string name="permission_setup_title">初期セットアップ</string>
+    <string name="permission_setup_subtitle">ギガを賢く節約するために、以下の3つの権限を設定してください。</string>
+    <string name="perm_status_granted">設定完了</string>
+    <string name="perm_status_missing">未設定</string>
+    
+    <string name="perm_secure_settings_title">通信速度の制御</string>
+    <string name="perm_secure_settings_desc">ギガの消費を抑えるため、端末の通信速度をコントロールする権限です。（ShizukuまたはPCから1回だけ設定します）</string>
+    <string name="tab_shizuku">Shizuku (おすすめ)</string>
+    <string name="tab_adb">PC / ADB (エンジニア向け)</string>
+    <string name="shizuku_btn_open_app">Shizuku アプリを開く</string>
+    <string name="shizuku_btn_install">Shizuku を入手</string>
+    <string name="shizuku_btn_grant">ワンタップで権限を付与</string>
+    <string name="shizuku_btn_authorize">Shizukuで認証をリクエスト</string>
+    <string name="adb_guide_desc">PCとスマホをUSBで接続し、ターミナルで以下のコマンドを実行してください:</string>
+    
+    <string name="perm_notification_title">状態通知の表示</string>
+    <string name="perm_notification_desc">現在の節約状態（制限中／Wi-Fiで無制限など）をリアルタイムに表示し、バックグラウンドでの安定動作を維持します。</string>
+    <string name="btn_grant_notification">通知を許可する</string>
+    
+    <string name="perm_battery_title">バックグラウンド動作の維持</string>
+    <string name="perm_battery_desc">スマホの画面がオフのときや他のアプリを使っている間も、通信の節約が途切れないようにします。</string>
+    <string name="btn_grant_battery">省電力の対象外にする</string>
+    
+    <string name="btn_start_app">DataThrottle を始める</string>
+    <string name="btn_copy_command">コマンドをコピー</string>
+    <string name="btn_check_permission">権限を確認</string>
+    <string name="command_copied">コマンドをクリップボードにコピーしました</string>
+    <string name="adb_command">adb shell pm grant com.datathrottle android.permission.WRITE_SECURE_SETTINGS</string>
+
+    <string name="permission_granted">権限: 取得済み</string>
+    <string name="permission_missing">権限: 未取得</string>
+    <string name="permission_error_title">権限エラー</string>
+    <string name="permission_error_message">WRITE_SECURE_SETTINGS 権限がありません。帯域制限の適用に失敗しました。</string>
+</resources>

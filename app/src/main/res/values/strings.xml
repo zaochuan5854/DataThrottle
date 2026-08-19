@@ -1,0 +1,117 @@
+<resources>
+    <string name="app_name">DataThrottle</string>
+    <string name="hero_subtitle">Save your data</string>
+
+    <!-- Notification Channels -->
+    <string name="notification_channel_service_name">Bandwidth Control Status</string>
+    <string name="notification_channel_service_description">Real-time status of bandwidth throttling and network state</string>
+    <string name="notification_channel_alerts_name">Bandwidth Alerts &amp; Errors</string>
+    <string name="notification_channel_alerts_description">Important warnings, permission alerts, and test completions</string>
+
+    <!-- Notification Content & Actions -->
+    <string name="notification_title">DataThrottle Active</string>
+    <string name="notification_title_cellular">DataThrottle: Limited (%.1f Mbps)</string>
+    <string name="notification_title_wifi">DataThrottle: Standby (Unlimited)</string>
+    <string name="notification_title_other">DataThrottle: Unlimited</string>
+    <string name="notification_title_test">DataThrottle: 100 kbps Test Active</string>
+    <string name="notification_desc_cellular">Cellular connection throttled to %1$.1f Mbps (%2$d kbps) to save mobile data.</string>
+    <string name="notification_desc_wifi">Connected to Wi-Fi. Full bandwidth available without throttling.</string>
+    <string name="notification_desc_test">Running 100 kbps stream speed test.</string>
+    <string name="notification_action_stop">Stop Service</string>
+
+    <!-- Status & Home UI -->
+    <string name="status_cellular">Cellular</string>
+    <string name="status_wifi">Wi-Fi</string>
+    <string name="status_other">Other Network</string>
+    <string name="status_none">Disconnected</string>
+    <string name="service_status_running">Service: Running</string>
+    <string name="service_status_stopped">Service: Stopped</string>
+    <string name="status_limited_to">Limited to %s</string>
+    <string name="status_unlimited">Unlimited</string>
+    <string name="status_unlimited_wifi">Unlimited (Wi-Fi)</string>
+    <string name="status_unlimited_disabled">Disabled</string>
+    <string name="status_desc_cellular">Your cellular connection is\nlimited to %s.</string>
+    <string name="status_desc_wifi">Your Wi-Fi connection is\nunlimited.</string>
+    <string name="status_desc_disabled">Your internet connection is\nnot limited.</string>
+    <string name="label_bandwidth_limit">Bandwidth Limit</string>
+    <string name="label_service_toggle">Enable Control Service</string>
+
+    <!-- Settings Screen -->
+    <string name="title_settings">Settings</string>
+    <string name="settings_section_details">Details</string>
+    <string name="settings_item_language">Language</string>
+    <string name="language_dialog_title">Select Language</string>
+    <string name="language_system_default">System Default</string>
+    <string name="settings_item_theme">Theme</string>
+    <string name="theme_dialog_title">Select Theme</string>
+    <string name="theme_system_default">System Default</string>
+    <string name="theme_light">Light Mode</string>
+    <string name="theme_dark">Dark Mode</string>
+    <string name="settings_item_test_title">100 kbps Test</string>
+    <string name="settings_item_test_desc">Verify throttling behavior and stream scanning at 100 kbps</string>
+    <string name="settings_item_permission_title">WRITE_SECURE_SETTINGS Permission</string>
+    <string name="settings_item_permission_granted">Permission granted (Throttling ready)</string>
+    <string name="settings_item_permission_missing">Missing (Grant via Shizuku or ADB)</string>
+    <string name="settings_item_reset_title">Reset &amp; Prepare for Uninstall</string>
+    <string name="settings_item_reset_desc">Restore default Android network limits and reset configuration</string>
+    <string name="settings_item_legal">Legal</string>
+    <!-- Version is displayed dynamically via BuildConfig.VERSION_NAME in SettingsScreen -->
+
+    <!-- Reset Dialog -->
+    <string name="reset_dialog_title">Reset &amp; Prepare for Uninstall</string>
+    <string name="reset_dialog_desc">This will clear all bandwidth throttling rules, restore original Android network configuration, and stop the background service.</string>
+    <string name="btn_confirm_reset">Reset All</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_safety_reset">Reset &amp; Prepare for Uninstall</string>
+    <string name="reset_warning">This will clear all settings and stop the service.</string>
+
+    <!-- Test UI -->
+    <string name="nav_test">100 kbps Test</string>
+    <string name="test_card_title">100 kbps Scanline Test</string>
+    <string name="btn_start_test">Start 100 kbps Test</string>
+    <string name="btn_cancel_test">Cancel Test</string>
+    <string name="test_running">Streaming at 100 kbps...</string>
+    <string name="test_speed_format">Speed: %.0f kbps</string>
+    <string name="test_report_title">Test Complete</string>
+    <string name="test_report_speed">Average Speed: %.0f kbps</string>
+    <string name="test_report_status">Status: Throttling Verified (All Passed)</string>
+    <string name="test_error_title">Test Error</string>
+    <string name="test_error_message">Failed to fetch test data from network. Please check your internet connection.</string>
+    <string name="btn_close">Close</string>
+
+    <!-- Permission Setup Screen & Guidance -->
+    <string name="permission_setup_title">Initial Setup</string>
+    <string name="permission_setup_subtitle">Please configure the following 3 permissions to start saving your mobile data.</string>
+    <string name="perm_status_granted">Configured</string>
+    <string name="perm_status_missing">Not Configured</string>
+    
+    <string name="perm_secure_settings_title">Bandwidth Control</string>
+    <string name="perm_secure_settings_desc">Allows DataThrottle to adjust network speed to save your mobile data. (One-time setup via Shizuku or PC)</string>
+    <string name="tab_shizuku">Shizuku (Recommended)</string>
+    <string name="tab_adb">PC / ADB (For Developers)</string>
+    <string name="shizuku_btn_open_app">Open Shizuku App</string>
+    <string name="shizuku_btn_install">Get Shizuku</string>
+    <string name="shizuku_btn_grant">Grant with One Tap</string>
+    <string name="shizuku_btn_authorize">Request Authorization</string>
+    <string name="adb_guide_desc">Connect your phone to a PC and run the following command in terminal:</string>
+    
+    <string name="perm_notification_title">Status Notification</string>
+    <string name="perm_notification_desc">Displays real-time data saving status and keeps the service running stably in the background.</string>
+    <string name="btn_grant_notification">Allow Notifications</string>
+    
+    <string name="perm_battery_title">Background Execution</string>
+    <string name="perm_battery_desc">Prevents the system from pausing data saving when the screen is off or while using other apps.</string>
+    <string name="btn_grant_battery">Exclude from Optimization</string>
+    
+    <string name="btn_start_app">Start DataThrottle</string>
+    <string name="btn_copy_command">Copy Command</string>
+    <string name="btn_check_permission">Check Permission</string>
+    <string name="command_copied">Command copied to clipboard</string>
+    <string name="adb_command">adb shell pm grant com.datathrottle android.permission.WRITE_SECURE_SETTINGS</string>
+
+    <!-- Deprecated -->
+    <string name="permission_granted">Permission: Granted</string>
+    <string name="permission_missing">Permission: Missing</string>
+    <string name="permission_error_title">Permission Error</string>
+    <string name="permission_error_message">Missing WRITE_SECURE_SETTINGS permission. Bandwidth control failed.</string>
+</resources>

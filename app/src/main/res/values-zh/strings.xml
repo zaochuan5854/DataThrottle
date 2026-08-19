@@ -1,0 +1,116 @@
+<resources>
+    <string name="app_name">DataThrottle</string>
+    <string name="hero_subtitle">节省您的移动流量</string>
+
+    <!-- Notification Channels -->
+    <string name="notification_channel_service_name">带宽控制状态</string>
+    <string name="notification_channel_service_description">实时显示带宽限制和网络连接状态</string>
+    <string name="notification_channel_alerts_name">警告与错误通知</string>
+    <string name="notification_channel_alerts_description">重要警告、权限异常及测试完成通知</string>
+
+    <!-- Notification Content & Actions -->
+    <string name="notification_title">DataThrottle 已启用</string>
+    <string name="notification_title_cellular">DataThrottle: 已限速 (%.1f Mbps)</string>
+    <string name="notification_title_wifi">DataThrottle: 不限速 (Wi-Fi)</string>
+    <string name="notification_title_other">DataThrottle: 不限速</string>
+    <string name="notification_title_test">DataThrottle: 100 kbps 测试运行中</string>
+    <string name="notification_desc_cellular">蜂窝网络已限制为 %1$.1f Mbps (%2$d kbps)，正在节省移动流量。</string>
+    <string name="notification_desc_wifi">已连接至 Wi-Fi。网络不受限，享受完整带宽。</string>
+    <string name="notification_desc_test">正在进行 100 kbps 流媒体速度测试。</string>
+    <string name="notification_action_stop">停止服务</string>
+
+    <!-- Status & Home UI -->
+    <string name="status_cellular">蜂窝网络</string>
+    <string name="status_wifi">Wi-Fi</string>
+    <string name="status_other">其他网络</string>
+    <string name="status_none">未连接</string>
+    <string name="service_status_running">服务: 运行中</string>
+    <string name="service_status_stopped">服务: 已停止</string>
+    <string name="status_limited_to">Limited to %s</string>
+    <string name="status_unlimited">Unlimited</string>
+    <string name="status_unlimited_wifi">Unlimited (Wi-Fi)</string>
+    <string name="status_unlimited_disabled">Disabled</string>
+    <string name="status_desc_cellular">您的蜂窝移动网络\n已限制为 %s。</string>
+    <string name="status_desc_wifi">您的 Wi-Fi 网络连接\n不受限制。</string>
+    <string name="status_desc_disabled">您的互联网连接\n未受限制。</string>
+    <string name="label_bandwidth_limit">Bandwidth Limit</string>
+    <string name="label_service_toggle">启用控制服务</string>
+
+    <!-- Settings Screen -->
+    <string name="title_settings">设置</string>
+    <string name="settings_section_details">详情</string>
+    <string name="settings_item_language">语言</string>
+    <string name="language_dialog_title">选择语言</string>
+    <string name="language_system_default">系统默认</string>
+    <string name="settings_item_theme">主题</string>
+    <string name="theme_dialog_title">选择主题</string>
+    <string name="theme_system_default">跟随系统</string>
+    <string name="theme_light">浅色模式</string>
+    <string name="theme_dark">深色模式</string>
+    <string name="settings_item_test_title">100 kbps 测速</string>
+    <string name="settings_item_test_desc">验证 100 kbps 限速效果与数据流测试</string>
+    <string name="settings_item_permission_title">WRITE_SECURE_SETTINGS 权限</string>
+    <string name="settings_item_permission_granted">已授予权限（可进行限速）</string>
+    <string name="settings_item_permission_missing">未授予（可通过 Shizuku 或 ADB 授权）</string>
+    <string name="settings_item_reset_title">重置设置与卸载准备</string>
+    <string name="settings_item_reset_desc">将系统网络带宽限制恢复为默认状态并重置配置</string>
+    <string name="settings_item_legal">法律声明</string>
+    <!-- Version is displayed dynamically via BuildConfig.VERSION_NAME in SettingsScreen -->
+
+    <!-- Reset Dialog -->
+    <string name="reset_dialog_title">重置设置与卸载准备</string>
+    <string name="reset_dialog_desc">这将清除所有限速规则，将 Android 系统网络配置恢复为默认状态，并停止后台服务。</string>
+    <string name="btn_confirm_reset">立即重置</string>
+    <string name="btn_cancel">取消</string>
+    <string name="btn_safety_reset">重置设置与卸载准备</string>
+    <string name="reset_warning">这将清除所有设置并停止服务。</string>
+
+    <!-- Test UI -->
+    <string name="nav_test">100 kbps 测试</string>
+    <string name="test_card_title">100 kbps 逐行加载测试</string>
+    <string name="btn_start_test">开始 100 kbps 测试</string>
+    <string name="btn_cancel_test">取消测试</string>
+    <string name="test_running">正在以 100 kbps 速率加载...</string>
+    <string name="test_speed_format">速度: %.0f kbps</string>
+    <string name="test_report_title">测试完成</string>
+    <string name="test_report_speed">平均速度: %.0f kbps</string>
+    <string name="test_report_status">状态: 已成功验证限速效果（通过）</string>
+    <string name="test_error_title">测试出错</string>
+    <string name="test_error_message">从网络获取测试数据失败，请检查您的网络连接。</string>
+    <string name="btn_close">关闭</string>
+
+    <!-- Permission Setup Screen & Guidance -->
+    <string name="permission_setup_title">初始设置</string>
+    <string name="permission_setup_subtitle">为了节省您的移动流量，请完成以下 3 项必要权限设置。</string>
+    <string name="perm_status_granted">已配置</string>
+    <string name="perm_status_missing">未配置</string>
+    
+    <string name="perm_secure_settings_title">网络限速权限</string>
+    <string name="perm_secure_settings_desc">用于调节手机网速以节省流量。（通过 Shizuku 或电脑进行一次性设置）</string>
+    <string name="tab_shizuku">Shizuku (推荐)</string>
+    <string name="tab_adb">电脑 / ADB (开发者)</string>
+    <string name="shizuku_btn_open_app">打开 Shizuku 应用</string>
+    <string name="shizuku_btn_install">获取 Shizuku</string>
+    <string name="shizuku_btn_grant">一键授予权限</string>
+    <string name="shizuku_btn_authorize">请求 Shizuku 授权</string>
+    <string name="adb_guide_desc">将手机连接到电脑，并在终端运行以下命令：</string>
+    
+    <string name="perm_notification_title">状态通知</string>
+    <string name="perm_notification_desc">实时显示当前节省状态（如移动网络限速中／Wi-Fi全速），并保持后台稳定运行。</string>
+    <string name="btn_grant_notification">允许通知</string>
+    
+    <string name="perm_battery_title">保持后台运行</string>
+    <string name="perm_battery_desc">防止手机锁屏或切换应用时流量节省服务被系统中断。</string>
+    <string name="btn_grant_battery">忽略电池优化</string>
+    
+    <string name="btn_start_app">开始使用 DataThrottle</string>
+    <string name="btn_copy_command">复制命令</string>
+    <string name="btn_check_permission">检查权限</string>
+    <string name="command_copied">命令已复制到剪贴板</string>
+    <string name="adb_command">adb shell pm grant com.datathrottle android.permission.WRITE_SECURE_SETTINGS</string>
+
+    <string name="permission_granted">权限：已获取</string>
+    <string name="permission_missing">权限：未获取</string>
+    <string name="permission_error_title">权限错误</string>
+    <string name="permission_error_message">缺少 WRITE_SECURE_SETTINGS 权限，限速操作失败。</string>
+</resources>

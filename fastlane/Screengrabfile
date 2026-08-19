@@ -1,0 +1,19 @@
+# Fastlane Screengrab configuration
+# Run: bundle exec fastlane screenshots
+
+app_package_name      'com.datathrottle'
+use_tests_in_classes  ['com.datathrottle.ScreenshotTest']
+
+# Locales to capture. Matches the locale subdirectories in values-*/
+locales               ['en-US']
+
+# Wipe previous screenshots before each run so stale images don't remain
+clear_previous_screenshots true
+
+# Output directory (relative to project root)
+# Final path: artworks/screenshots/en-US/images/phoneScreenshots/
+output_directory      './artworks/screenshots'
+
+# APK paths produced by `./gradlew assembleDebug assembleDebugAndroidTest`
+app_apk_path          'app/build/outputs/apk/debug/app-debug.apk'
+tests_apk_path        'app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'

@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'   # e.g. v1.2.0, v2.0.0-rc1
+
+jobs:
+  release-build:
+    name: Release Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write  # needed to create GitHub Releases
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for git describe
+
+      # ──────────────────────────────────────────────
+      # バージョンを git タグから自動抽出
+      # e.g. refs/tags/v1.2.0 → VERSION_NAME=1.2.0, VERSION_CODE=10200
+      # ──────────────────────────────────────────────
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          echo "VERSION_NAME=$TAG" >> "$GITHUB_OUTPUT"
+          # Convert semver to integer versionCode: 1.2.3 → 10203  (max patch 99)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${TAG%%-*}"
+          PATCH="${PATCH:-0}"
+          VERSION_CODE=$(( MAJOR * 10000 + MINOR * 100 + PATCH ))
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "Tag: v$TAG  →  versionCode: $VERSION_CODE"
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # ──────────────────────────────────────────────
+      # Unit Tests (リリース前にも必ず実行)
+      # ──────────────────────────────────────────────
+      - name: Run unit tests
+        run: ./gradlew test --stacktrace
+
+      # ──────────────────────────────────────────────
+      # Release Build
+      # バージョンは Gradle プロパティで上書き → gradle.properties と完全一致
+      # ──────────────────────────────────────────────
+      - name: Build release APK
+        run: |
+          ./gradlew assembleRelease \
+            -PAPP_VERSION_NAME="${{ steps.version.outputs.VERSION_NAME }}" \
+            -PAPP_VERSION_CODE="${{ steps.version.outputs.VERSION_CODE }}" \
+            --stacktrace
+
+      # ──────────────────────────────────────────────
+      # 署名（キーストアを GitHub Secrets で管理する場合）
+      # 以下を GitHub Secrets に登録してください:
+      #   KEYSTORE_BASE64   : base64エンコードしたキーストアファイル
+      #   KEY_ALIAS         : キーエイリアス
+      #   KEY_PASSWORD      : キーパスワード
+      #   STORE_PASSWORD    : ストアパスワード
+      # ──────────────────────────────────────────────
+      # - name: Sign APK
+      #   uses: r0adkll/sign-android-release@v1
+      #   with:
+      #     releaseDirectory: app/build/outputs/apk/release
+      #     signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
+      #     alias: ${{ secrets.KEY_ALIAS }}
+      #     keyStorePassword: ${{ secrets.STORE_PASSWORD }}
+      #     keyPassword: ${{ secrets.KEY_PASSWORD }}
+
+      # ──────────────────────────────────────────────
+      # GitHub Releases に APK をアップロード
+      # ──────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "DataThrottle ${{ steps.version.outputs.VERSION_NAME }}"
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          files: app/build/outputs/apk/release/*.apk
+          body: |
+            ## DataThrottle v${{ steps.version.outputs.VERSION_NAME }}
+
+            ### Changes
+            <!-- Add release notes here, or link to CHANGELOG.md -->
+
+            ### Installation
+            Download the APK below and install it on your Android device (Android 13+).
+
+            > [!NOTE]
+            > This build is unsigned. To install, enable **Install unknown apps** in system settings.

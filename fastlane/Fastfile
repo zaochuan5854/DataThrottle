@@ -1,0 +1,18 @@
+# frozen_string_literal: true
+
+default_platform(:android)
+
+platform :android do
+  desc "Build debug APKs and capture screenshots with Screengrab"
+  lane :screenshots do
+    gradle(
+      task: "assemble",
+      build_type: "Debug"
+    )
+    gradle(
+      task: "assemble",
+      build_type: "DebugAndroidTest"
+    )
+    screengrab
+  end
+end
