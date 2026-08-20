@@ -6,8 +6,8 @@ plugins {
 }
 
 // ─── Version: read from gradle.properties (overridable from CI) ───────────────
-val appVersionName: String = project.findProperty("APP_VERSION_NAME") as String? ?: "1.0.0"
-val appVersionCode: Int    = (project.findProperty("APP_VERSION_CODE") as String?)?.toInt() ?: 1
+val appVersionName: String = project.findProperty("APP_VERSION_NAME") as String? ?: "0.1.0"
+val appVersionCode: Int    = (project.findProperty("APP_VERSION_CODE") as String?)?.toInt() ?: 100
 
 android {
     namespace = "com.datathrottle"
