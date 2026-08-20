@@ -28,52 +28,27 @@ android {
         buildConfigField("String", "APP_VERSION_NAME", "\"$appVersionName\"")
     }
 
+    val keystorePath = project.findProperty("KEYSTORE_FILE") as String? ?: System.getenv("KEYSTORE_FILE")
+    val hasReleaseKeystore = keystorePath != null && file(keystorePath).exists()
+
     signingConfigs {
-        create("release") {
-            val keystoreFile = project.findProperty("KEYSTORE_FILE") as String? ?: System.getenv("KEYSTORE_FILE")
-            if (keystoreFile != null && file(keystoreFile).exists()) {
-                storeFile = file(keystoreFile)
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(keystorePath!!)
                 storePassword = project.findProperty("STORE_PASSWORD") as String? ?: System.getenv("STORE_PASSWORD")
                 keyAlias = project.findProperty("KEY_ALIAS") as String? ?: System.getenv("KEY_ALIAS")
                 keyPassword = project.findProperty("KEY_PASSWORD") as String? ?: System.getenv("KEY_PASSWORD")
-            } else {
-                val candidateDirs = listOf(
-                    file("${System.getProperty("user.home")}/.android"),
-                    file("${System.getProperty("user.home")}/.config/.android"),
-                    rootProject.file(".gradle")
-                )
-                val targetDir = candidateDirs.firstOrNull { it.exists() || it.mkdirs() } ?: rootProject.file(".gradle")
-                val fallbackKeystore = File(targetDir, "debug.keystore")
-                if (!fallbackKeystore.exists()) {
-                    try {
-                        ProcessBuilder(
-                            "keytool", "-genkeypair", "-v",
-                            "-keystore", fallbackKeystore.absolutePath,
-                            "-storepass", "android",
-                            "-alias", "androiddebugkey",
-                            "-keypass", "android",
-                            "-keyalg", "RSA",
-                            "-keysize", "2048",
-                            "-validity", "10000",
-                            "-dname", "CN=DataThrottle,O=DataThrottle,C=US"
-                        ).inheritIO().start().waitFor()
-                    } catch (_: Exception) {}
-                }
-                if (fallbackKeystore.exists()) {
-                    storeFile = fallbackKeystore
-                    storePassword = "android"
-                    keyAlias = "androiddebugkey"
-                    keyPassword = "android"
-                } else {
-                    initWith(getByName("debug"))
-                }
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             optimization {
                 enable = false
             }

@@ -49,6 +49,22 @@ jobs:
         run: chmod +x gradlew
 
       # ──────────────────────────────────────────────
+      # Setup Keystore for CI build
+      # ──────────────────────────────────────────────
+      - name: Setup Keystore
+        run: |
+          mkdir -p ~/.android
+          keytool -genkeypair -v \
+            -keystore ~/.android/debug.keystore \
+            -alias androiddebugkey \
+            -keypass android \
+            -storepass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      # ──────────────────────────────────────────────
       # Unit Tests
       # ──────────────────────────────────────────────
       - name: Run unit tests
