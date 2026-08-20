@@ -57,9 +57,7 @@ jobs:
         run: chmod +x gradlew
 
       # ──────────────────────────────────────────────
-      # Release 署名用キーストアの初期化
-      # GitHub Secrets (KEYSTORE_BASE64) が存在すればそれを使用。
-      # 未設定の場合は自動生成のフォールバックキーストアを使用。
+      # Release 署名用キーストアのセットアップ (Secrets 必須)
       # ──────────────────────────────────────────────
       - name: Setup Keystore
         env:
@@ -68,27 +66,22 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          mkdir -p ~/.android ~/.config/.android
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "Using production keystore from GitHub Secrets..."
-            echo "$KEYSTORE_BASE64" | base64 -d > "$HOME/release.jks"
-            echo "KEYSTORE_FILE=$HOME/release.jks" >> "$GITHUB_ENV"
-            echo "STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
-            echo "KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
-            echo "KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
-          else
-            echo "Production secrets not found. Generating fallback keystore..."
-            keytool -genkeypair -v \
-              -keystore ~/.android/debug.keystore \
-              -alias androiddebugkey \
-              -keypass android \
-              -storepass android \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=DataThrottle,OU=Android,O=DataThrottle,C=US"
-            cp ~/.android/debug.keystore ~/.config/.android/debug.keystore 2>/dev/null || true
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::❌ Release build failed: Required GitHub Secrets for signing are missing!"
+            echo "Please configure the following Repository Secrets in Settings > Secrets and variables > Actions:"
+            echo "  - KEYSTORE_BASE64"
+            echo "  - STORE_PASSWORD"
+            echo "  - KEY_ALIAS"
+            echo "  - KEY_PASSWORD"
+            exit 1
           fi
+
+          echo "Setting up production keystore from GitHub Secrets..."
+          echo "$KEYSTORE_BASE64" | base64 -d > "$HOME/release.jks"
+          echo "KEYSTORE_FILE=$HOME/release.jks" >> "$GITHUB_ENV"
+          echo "STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
 
       # ──────────────────────────────────────────────
       # Unit Tests (リリース前にも必ず実行)
