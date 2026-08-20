@@ -13,5 +13,11 @@
 .externalNativeBuild
 .cxx
 local.properties
-.artifacts/
+*.artifacts/
 *.tmp.*
+
+# Keystores & Signing Keys
+*.jks
+*.keystore
+*.key
+signing.properties

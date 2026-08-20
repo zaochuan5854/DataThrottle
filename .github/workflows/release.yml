@@ -58,20 +58,37 @@ jobs:
 
       # ──────────────────────────────────────────────
       # Release 署名用キーストアの初期化
+      # GitHub Secrets (KEYSTORE_BASE64) が存在すればそれを使用。
+      # 未設定の場合は自動生成のフォールバックキーストアを使用。
       # ──────────────────────────────────────────────
       - name: Setup Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           mkdir -p ~/.android ~/.config/.android
-          keytool -genkeypair -v \
-            -keystore ~/.android/debug.keystore \
-            -alias androiddebugkey \
-            -keypass android \
-            -storepass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=DataThrottle,OU=Android,O=DataThrottle,C=US"
-          cp ~/.android/debug.keystore ~/.config/.android/debug.keystore 2>/dev/null || true
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Using production keystore from GitHub Secrets..."
+            echo "$KEYSTORE_BASE64" | base64 -d > "$HOME/release.jks"
+            echo "KEYSTORE_FILE=$HOME/release.jks" >> "$GITHUB_ENV"
+            echo "STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            echo "Production secrets not found. Generating fallback keystore..."
+            keytool -genkeypair -v \
+              -keystore ~/.android/debug.keystore \
+              -alias androiddebugkey \
+              -keypass android \
+              -storepass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=DataThrottle,OU=Android,O=DataThrottle,C=US"
+            cp ~/.android/debug.keystore ~/.config/.android/debug.keystore 2>/dev/null || true
+          fi
 
       # ──────────────────────────────────────────────
       # Unit Tests (リリース前にも必ず実行)
