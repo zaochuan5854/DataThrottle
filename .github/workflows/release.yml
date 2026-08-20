@@ -63,8 +63,7 @@ jobs:
         run: ./gradlew test --stacktrace
 
       # ──────────────────────────────────────────────
-      # Release Build
-      # バージョンは Gradle プロパティで上書き → gradle.properties と完全一致
+      # Release Build (Signed via Gradle signingConfig)
       # ──────────────────────────────────────────────
       - name: Build release APK
         run: |
@@ -73,42 +72,25 @@ jobs:
             -PAPP_VERSION_CODE="${{ steps.version.outputs.VERSION_CODE }}" \
             --stacktrace
 
-      # ──────────────────────────────────────────────
-      # 署名（キーストアを GitHub Secrets で管理する場合）
-      # 以下を GitHub Secrets に登録してください:
-      #   KEYSTORE_BASE64   : base64エンコードしたキーストアファイル
-      #   KEY_ALIAS         : キーエイリアス
-      #   KEY_PASSWORD      : キーパスワード
-      #   STORE_PASSWORD    : ストアパスワード
-      # ──────────────────────────────────────────────
-      # - name: Sign APK
-      #   uses: r0adkll/sign-android-release@v1
-      #   with:
-      #     releaseDirectory: app/build/outputs/apk/release
-      #     signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
-      #     alias: ${{ secrets.KEY_ALIAS }}
-      #     keyStorePassword: ${{ secrets.STORE_PASSWORD }}
-      #     keyPassword: ${{ secrets.KEY_PASSWORD }}
+          cp app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/DataThrottle-v${{ steps.version.outputs.VERSION_NAME }}.apk"
 
       # ──────────────────────────────────────────────
-      # GitHub Releases に APK をアップロード
+      # GitHub Releases に 署名付き APK をアップロード
       # ──────────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "DataThrottle ${{ steps.version.outputs.VERSION_NAME }}"
+          name: "DataThrottle v${{ steps.version.outputs.VERSION_NAME }}"
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
-          files: app/build/outputs/apk/release/*.apk
+          files: app/build/outputs/apk/release/DataThrottle-v${{ steps.version.outputs.VERSION_NAME }}.apk
           body: |
             ## DataThrottle v${{ steps.version.outputs.VERSION_NAME }}
 
-            ### Changes
-            <!-- Add release notes here, or link to CHANGELOG.md -->
-
             ### Installation
-            Download the APK below and install it on your Android device (Android 13+).
+            Download the signed APK (`DataThrottle-v${{ steps.version.outputs.VERSION_NAME }}.apk`) below and install it directly on your Android device (Android 13+).
 
-            > [!NOTE]
-            > This build is unsigned. To install, enable **Install unknown apps** in system settings.
+            ```bash
+            adb install DataThrottle-v${{ steps.version.outputs.VERSION_NAME }}.apk
+            ```

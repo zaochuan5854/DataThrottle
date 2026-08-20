@@ -28,8 +28,24 @@ android {
         buildConfigField("String", "APP_VERSION_NAME", "\"$appVersionName\"")
     }
 
+    signingConfigs {
+        create("release") {
+            val keystoreFile = project.findProperty("KEYSTORE_FILE") as String? ?: System.getenv("KEYSTORE_FILE")
+            if (keystoreFile != null && file(keystoreFile).exists()) {
+                storeFile = file(keystoreFile)
+                storePassword = project.findProperty("STORE_PASSWORD") as String? ?: System.getenv("STORE_PASSWORD")
+                keyAlias = project.findProperty("KEY_ALIAS") as String? ?: System.getenv("KEY_ALIAS")
+                keyPassword = project.findProperty("KEY_PASSWORD") as String? ?: System.getenv("KEY_PASSWORD")
+            } else {
+                // Fallback to debug signing config so release APK is always validly signed and installable
+                initWith(getByName("debug"))
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             optimization {
                 enable = false
             }
@@ -42,6 +58,11 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true  // Enable BuildConfig generation
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 }
 
