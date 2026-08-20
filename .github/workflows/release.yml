@@ -57,6 +57,23 @@ jobs:
         run: chmod +x gradlew
 
       # ──────────────────────────────────────────────
+      # Release 署名用キーストアの初期化
+      # ──────────────────────────────────────────────
+      - name: Setup Keystore
+        run: |
+          mkdir -p ~/.android ~/.config/.android
+          keytool -genkeypair -v \
+            -keystore ~/.android/debug.keystore \
+            -alias androiddebugkey \
+            -keypass android \
+            -storepass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=DataThrottle,OU=Android,O=DataThrottle,C=US"
+          cp ~/.android/debug.keystore ~/.config/.android/debug.keystore 2>/dev/null || true
+
+      # ──────────────────────────────────────────────
       # Unit Tests (リリース前にも必ず実行)
       # ──────────────────────────────────────────────
       - name: Run unit tests

@@ -37,8 +37,36 @@ android {
                 keyAlias = project.findProperty("KEY_ALIAS") as String? ?: System.getenv("KEY_ALIAS")
                 keyPassword = project.findProperty("KEY_PASSWORD") as String? ?: System.getenv("KEY_PASSWORD")
             } else {
-                // Fallback to debug signing config so release APK is always validly signed and installable
-                initWith(getByName("debug"))
+                val candidateDirs = listOf(
+                    file("${System.getProperty("user.home")}/.android"),
+                    file("${System.getProperty("user.home")}/.config/.android"),
+                    rootProject.file(".gradle")
+                )
+                val targetDir = candidateDirs.firstOrNull { it.exists() || it.mkdirs() } ?: rootProject.file(".gradle")
+                val fallbackKeystore = File(targetDir, "debug.keystore")
+                if (!fallbackKeystore.exists()) {
+                    try {
+                        ProcessBuilder(
+                            "keytool", "-genkeypair", "-v",
+                            "-keystore", fallbackKeystore.absolutePath,
+                            "-storepass", "android",
+                            "-alias", "androiddebugkey",
+                            "-keypass", "android",
+                            "-keyalg", "RSA",
+                            "-keysize", "2048",
+                            "-validity", "10000",
+                            "-dname", "CN=DataThrottle,O=DataThrottle,C=US"
+                        ).inheritIO().start().waitFor()
+                    } catch (_: Exception) {}
+                }
+                if (fallbackKeystore.exists()) {
+                    storeFile = fallbackKeystore
+                    storePassword = "android"
+                    keyAlias = "androiddebugkey"
+                    keyPassword = "android"
+                } else {
+                    initWith(getByName("debug"))
+                }
             }
         }
     }
