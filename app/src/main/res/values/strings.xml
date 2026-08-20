@@ -2,6 +2,12 @@
     <string name="app_name">DataThrottle</string>
     <string name="hero_subtitle">Save your data</string>
 
+    <!-- Loading Screen -->
+    <string name="loading_status_init_kernel">Initializing kernel rate-limit module…</string>
+    <string name="loading_status_sync_network">Synchronizing network interfaces…</string>
+    <string name="loading_status_finishing">Finalizing initialization…</string>
+    <string name="loading_status_ready">Ready! Starting DataThrottle…</string>
+
     <!-- Notification Channels -->
     <string name="notification_channel_service_name">Bandwidth Control Status</string>
     <string name="notification_channel_service_description">Real-time status of bandwidth throttling and network state</string>
@@ -54,7 +60,8 @@
     <string name="settings_item_permission_missing">Missing (Grant via Shizuku or ADB)</string>
     <string name="settings_item_reset_title">Reset &amp; Prepare for Uninstall</string>
     <string name="settings_item_reset_desc">Restore default Android network limits and reset configuration</string>
-    <string name="settings_item_legal">Legal</string>
+    <string name="settings_item_version">Version</string>
+    <string name="settings_item_repository">Source Code (GitHub)</string>
     <!-- Version is displayed dynamically via BuildConfig.VERSION_NAME in SettingsScreen -->
 
     <!-- Reset Dialog -->

@@ -1,6 +1,12 @@
 <resources>
     <string name="app_name">DataThrottle</string>
-    <string name="hero_subtitle">节省您的移动流量</string>
+    <string name="hero_subtitle">节省您的移动数据</string>
+
+    <!-- Loading Screen -->
+    <string name="loading_status_init_kernel">正在初始化内核限速模块…</string>
+    <string name="loading_status_sync_network">正在同步网络接口…</string>
+    <string name="loading_status_finishing">正在完成初始化…</string>
+    <string name="loading_status_ready">就绪！正在启动…</string>
 
     <!-- Notification Channels -->
     <string name="notification_channel_service_name">带宽控制状态</string>
@@ -54,7 +60,8 @@
     <string name="settings_item_permission_missing">未授予（可通过 Shizuku 或 ADB 授权）</string>
     <string name="settings_item_reset_title">重置设置与卸载准备</string>
     <string name="settings_item_reset_desc">将系统网络带宽限制恢复为默认状态并重置配置</string>
-    <string name="settings_item_legal">法律声明</string>
+    <string name="settings_item_version">版本</string>
+    <string name="settings_item_repository">源代码 (GitHub)</string>
     <!-- Version is displayed dynamically via BuildConfig.VERSION_NAME in SettingsScreen -->
 
     <!-- Reset Dialog -->

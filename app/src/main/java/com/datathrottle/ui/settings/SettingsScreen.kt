@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,6 +45,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
 
@@ -264,7 +266,7 @@ fun SettingsScreen(
                 )
             }
 
-            // 法的事項（バージョン情報）
+            // バージョン情報
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -273,7 +275,7 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = stringResource(R.string.settings_item_legal),
+                    text = stringResource(R.string.settings_item_version),
                     style = MaterialTheme.typography.bodyLarge.copy(
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp
@@ -290,13 +292,17 @@ fun SettingsScreen(
                 )
             }
 
-            // リポジトリリンク（将来用）
-            /*
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 72.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+            )
+
+            // リポジトリリンク (GitHub)
             SettingsItemRow(
                 icon = Icons.Default.Code,
                 iconTint = MaterialTheme.colorScheme.primary,
                 title = stringResource(R.string.settings_item_repository),
-                subtitle = "https://github.com/...",
+                subtitle = "https://github.com/zaochuan5854/DataThrottle",
                 trailing = {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
@@ -304,9 +310,8 @@ fun SettingsScreen(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                 },
-                onClick = { uriHandler.openUri("https://github.com/...") }
+                onClick = { uriHandler.openUri("https://github.com/zaochuan5854/DataThrottle") }
             )
-            */
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
         }

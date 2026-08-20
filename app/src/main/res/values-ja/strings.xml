@@ -1,6 +1,12 @@
 <resources>
     <string name="app_name">DataThrottle</string>
-    <string name="hero_subtitle">ギガを節約</string>
+    <string name="hero_subtitle">ギガを賢く節約</string>
+
+    <!-- Loading Screen -->
+    <string name="loading_status_init_kernel">カーネル帯域制限モジュールを初期化中…</string>
+    <string name="loading_status_sync_network">ネットワークインターフェースを同期中…</string>
+    <string name="loading_status_finishing">初期化を完了しています…</string>
+    <string name="loading_status_ready">準備完了！起動しています…</string>
 
     <!-- Notification Channels -->
     <string name="notification_channel_service_name">帯域制御ステータス</string>
@@ -54,7 +60,8 @@
     <string name="settings_item_permission_missing">未取得（ShizukuまたはADBで付与）</string>
     <string name="settings_item_reset_title">設定リセット・アンインストール準備</string>
     <string name="settings_item_reset_desc">帯域制限設定をOS初期状態に復元してリセット</string>
-    <string name="settings_item_legal">法的事項</string>
+    <string name="settings_item_version">バージョン</string>
+    <string name="settings_item_repository">ソースコード (GitHub)</string>
     <!-- Version is displayed dynamically via BuildConfig.VERSION_NAME in SettingsScreen -->
 
     <!-- Reset Dialog -->
