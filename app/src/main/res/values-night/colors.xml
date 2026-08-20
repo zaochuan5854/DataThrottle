@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App Icon Colors (Dark Mode: Black Background, Orange Accent) -->
+    <color name="ic_launcher_background">#FF000000</color>
+    <color name="ic_launcher_accent">#FFF6821F</color>
+
+    <!-- Window Background (Dark Mode) -->
+    <color name="window_background">#FF121212</color>
+</resources>
