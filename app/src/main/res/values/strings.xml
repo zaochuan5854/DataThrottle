@@ -36,6 +36,8 @@
     <string name="status_unlimited">Unlimited</string>
     <string name="status_unlimited_wifi">Unlimited (Wi-Fi)</string>
     <string name="status_unlimited_disabled">Disabled</string>
+    <string name="status_not_enforced">Not enforced — permission required</string>
+    <string name="status_not_enforced_desc">The limit was requested but could not be applied. Grant WRITE_SECURE_SETTINGS to enforce throttling.</string>
     <string name="status_desc_cellular">Your cellular connection is\nlimited to %s.</string>
     <string name="status_desc_wifi">Your Wi-Fi connection is\nunlimited.</string>
     <string name="status_desc_disabled">Your internet connection is\nnot limited.</string>
@@ -81,9 +83,15 @@
     <string name="test_speed_format">Speed: %.0f kbps</string>
     <string name="test_report_title">Test Complete</string>
     <string name="test_report_speed">Average Speed: %.0f kbps</string>
-    <string name="test_report_status">Status: Throttling Verified (All Passed)</string>
+    <string name="test_report_status_verified">Status: Throttling Verified (All Passed)</string>
+    <string name="test_report_status_failed">Status: Throttling NOT applied (Failed)</string>
+    <string name="test_report_target">Target: %.0f kbps</string>
+    <string name="test_report_failed_hint">Measured speed far exceeds the limit. Check the WRITE_SECURE_SETTINGS permission and the service state.</string>
+    <string name="test_report_transport_exempt">This download ran on the app\'s own uid, which the system excludes from shaping — so throttling cannot be measured this way. Start Shizuku (shell uid is shaping-governed) and run the test again.</string>
+    <string name="tile_start_failed">The system blocked the background start. Open DataThrottle to toggle the limit.</string>
     <string name="test_error_title">Test Error</string>
     <string name="test_error_message">Failed to fetch test data from network. Please check your internet connection.</string>
+    <string name="test_error_limit_not_applied">The 100 kbps limit was not confirmed within 3 seconds, so the test was not started. Check the WRITE_SECURE_SETTINGS permission and the service state.</string>
     <string name="btn_close">Close</string>
 
     <!-- Permission Setup Screen & Guidance -->

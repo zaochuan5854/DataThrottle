@@ -1,5 +1,6 @@
 package com.datathrottle.service
 
+import android.app.DownloadManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -10,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -22,12 +24,18 @@ import com.datathrottle.core.NetworkType
 import com.datathrottle.data.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 class BandwidthControlService : Service() {
 
@@ -41,8 +49,9 @@ class BandwidthControlService : Service() {
     private val channelIdAlerts = "bandwidth_alerts_channel_v1"
 
     private var serviceJob: Job? = null
-    private var testTimerJob: Job? = null
-    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+    // Enforcement is ContentProvider IPC (Settings.Global) and DataStore disk I/O:
+    // keep it off the main thread (S1-07). Teardown paths reset synchronously.
+    private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
 
     private var diagnosticLimit: Long? = null
     private var currentLimitMbps: Float = 1.0f
@@ -52,11 +61,17 @@ class BandwidthControlService : Service() {
     companion object {
         private const val TAG = "BandwidthControlService"
         private const val UNLIMITED = -1L
+        private const val TEARDOWN_TIMEOUT_MS = 1500L
         const val MBPS_TO_BYTES_PER_SECOND = 125000L
-        const val RATE_5KB_PER_SECOND = 5000L // 5 KB/s = 40 kbps
 
         const val ACTION_STOP_SERVICE = "com.datathrottle.STOP_SERVICE"
         const val ACTION_SET_DIAGNOSTIC = "com.datathrottle.SET_DIAGNOSTIC"
+        const val ACTION_DEBUG_DM_PROBE = "com.datathrottle.DEBUG_DM_PROBE"
+
+        // E7: probe object must be ≫ shaper burst (token-bucket), so use a 2 MB
+        // object instead of the 82 KB test image. Range requests supported (206).
+        private const val DM_PROBE_URL = "https://files.catbox.moe/64uvzg.bin"
+        private const val DM_PROBE_TIMEOUT_MS = 300_000L
         const val EXTRA_LIMIT_BYTES = "limit_bytes"
 
         private val _isRunning = MutableStateFlow(false)
@@ -107,6 +122,7 @@ class BandwidthControlService : Service() {
                     applyAppropriateLimit(limitMbps, networkMonitor.networkType.value)
                 }
             }
+            ACTION_DEBUG_DM_PROBE -> runDebugDmProbe()
         }
 
         val initialType = networkMonitor.networkType.value
@@ -118,6 +134,79 @@ class BandwidthControlService : Service() {
         }
         
         return START_STICKY
+    }
+
+    /**
+     * Debug-only DownloadManager transport probe (E3a definitive verdict):
+     * enqueues the test image on the DownloadProvider uid and logs byte
+     * progress, so shaping scope for uid 10099 can be measured in the same
+     * window as a shell-uid control transfer.
+     */
+    private fun runDebugDmProbe() {
+        val manager = getSystemService(DownloadManager::class.java)
+        if (manager == null) {
+            Log.e(TAG, "DM probe: no DownloadManager")
+            return
+        }
+        val dest = java.io.File(getExternalFilesDir(null), "dt_probe.bin")
+        dest.delete()
+        val request = android.app.DownloadManager.Request(
+            Uri.parse(DM_PROBE_URL)
+        ).apply {
+            setDestinationUri(Uri.fromFile(dest))
+            setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            setAllowedOverMetered(true)
+            setAllowedOverRoaming(true)
+        }
+        val id = try {
+            manager.enqueue(request)
+        } catch (e: Exception) {
+            Log.e(TAG, "DM probe: enqueue failed: ${e.message}")
+            return
+        }
+        serviceScope.launch {
+            val t0 = System.nanoTime()
+            var lastLogAt = 0L
+            while (true) {
+                delay(500)
+                val now = System.nanoTime()
+                val elapsedMs = (now - t0) / 1_000_000L
+                val (status, bytes) = withContext(Dispatchers.IO) {
+                    manager.query(
+                        android.app.DownloadManager.Query().setFilterById(id)
+                    ).use { c ->
+                        if (c == null || !c.moveToFirst()) {
+                            android.app.DownloadManager.STATUS_FAILED to 0L
+                        } else {
+                            c.getInt(c.getColumnIndexOrThrow(android.app.DownloadManager.COLUMN_STATUS)) to
+                                c.getLong(c.getColumnIndexOrThrow(android.app.DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                        }
+                    }
+                }
+                if (elapsedMs - lastLogAt >= 1000) {
+                    Log.d(TAG, "DM probe t=${elapsedMs}ms bytes=$bytes")
+                    lastLogAt = elapsedMs
+                }
+                when (status) {
+                    android.app.DownloadManager.STATUS_SUCCESSFUL -> {
+                        val avgKbps = bytes * 8.0 / elapsedMs.coerceAtLeast(1)
+                        Log.d(TAG, "DM probe DONE bytes=$bytes elapsedMs=$elapsedMs avgKbps=$avgKbps")
+                        withContext(Dispatchers.IO) { manager.remove(id) }
+                        return@launch
+                    }
+                    android.app.DownloadManager.STATUS_FAILED -> {
+                        Log.e(TAG, "DM probe FAILED at ${elapsedMs}ms bytes=$bytes")
+                        withContext(Dispatchers.IO) { manager.remove(id) }
+                        return@launch
+                    }
+                }
+                if (elapsedMs > DM_PROBE_TIMEOUT_MS) {
+                    Log.e(TAG, "DM probe TIMEOUT at bytes=$bytes")
+                    withContext(Dispatchers.IO) { manager.remove(id) }
+                    return@launch
+                }
+            }
+        }
     }
 
     private fun applyAppropriateLimit(limitMbps: Float, networkType: NetworkType) {
@@ -132,15 +221,21 @@ class BandwidthControlService : Service() {
         lastAppliedType = networkType
 
         Log.d(TAG, "Applying bandwidth limit: $limit (Type: $networkType, Diag: ${diagnosticLimit != null}, StateChanged: $hasStateChanged)")
-        try {
-            bandwidthController.setIngressRateLimit(limit)
-        } catch (e: SecurityException) {
-            Log.e(TAG, "Failed to set bandwidth limit: Missing WRITE_SECURE_SETTINGS permission", e)
-            showPermissionErrorNotification()
-        } catch (e: Exception) {
-            Log.e(TAG, "Unexpected error setting bandwidth limit", e)
+        var enforced = true
+        bandwidthController.setIngressRateLimit(limit)
+            .onFailure { e ->
+                enforced = false
+                Log.e(TAG, "Bandwidth limit NOT enforced ($limit): ${e.message}", e)
+                showPermissionErrorNotification()
+            }
+        // Record the applied value so fail-safe paths (task removal, boot, launch)
+        // can clear a residual limit even if this process is killed abruptly.
+        if (enforced) {
+            serviceScope.launch {
+                settingsRepository.setLastAppliedLimitBytes(limit)
+            }
         }
-        updateNotification(networkType, diagnosticLimit != null, limitMbps, shouldAlert = hasStateChanged)
+        updateNotification(networkType, diagnosticLimit != null, limitMbps, shouldAlert = hasStateChanged, notEnforced = !enforced)
     }
 
     private fun showPermissionErrorNotification() {
@@ -212,7 +307,8 @@ class BandwidthControlService : Service() {
         type: NetworkType,
         isDiagnostic: Boolean = false,
         limitMbps: Float = 1.0f,
-        shouldAlert: Boolean = false
+        shouldAlert: Boolean = false,
+        notEnforced: Boolean = false
     ): Notification {
         val contentIntent = PendingIntent.getActivity(
             this,
@@ -231,6 +327,7 @@ class BandwidthControlService : Service() {
         val formattedLimit = if (limitMbps < 1.0f) String.format("%.1f Mbps", limitMbps) else if (limitMbps % 1.0f == 0f) String.format("%.0f Mbps", limitMbps) else String.format("%.1f Mbps", limitMbps)
 
         val title = when {
+            notEnforced -> getString(R.string.status_not_enforced)
             isDiagnostic -> getString(R.string.test_running)
             type == NetworkType.CELLULAR -> getString(R.string.status_limited_to, formattedLimit)
             type == NetworkType.WIFI -> getString(R.string.status_unlimited_wifi)
@@ -238,6 +335,7 @@ class BandwidthControlService : Service() {
         }
 
         val desc = when {
+            notEnforced -> getString(R.string.status_not_enforced_desc)
             isDiagnostic -> getString(R.string.notification_desc_test)
             type == NetworkType.CELLULAR -> getString(R.string.status_desc_cellular, formattedLimit).replace("\n", " ")
             type == NetworkType.WIFI -> getString(R.string.status_desc_wifi).replace("\n", " ")
@@ -245,6 +343,7 @@ class BandwidthControlService : Service() {
         }
 
         val color = when {
+            notEnforced -> Color.parseColor("#DC2626") // Red
             isDiagnostic -> Color.parseColor("#00E5FF") // Cyan
             type == NetworkType.CELLULAR -> Color.parseColor("#2563EB") // Blue
             type == NetworkType.WIFI -> Color.parseColor("#0288D1") // Light Blue
@@ -284,28 +383,67 @@ class BandwidthControlService : Service() {
         type: NetworkType,
         isDiagnostic: Boolean = false,
         limitMbps: Float = 1.0f,
-        shouldAlert: Boolean = false
+        shouldAlert: Boolean = false,
+        notEnforced: Boolean = false
     ) {
-        val notification = createNotification(type, isDiagnostic, limitMbps, shouldAlert)
+        val notification = createNotification(type, isDiagnostic, limitMbps, shouldAlert, notEnforced)
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(notificationId, notification)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /**
+     * Fail-safe (S1-06): when the user swipes the task away, clear the persistent
+     * kernel-level cap before the process dies. The write is intentionally
+     * synchronous — an async write may never run if the system kills us right after.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.d(TAG, "onTaskRemoved: clearing bandwidth limit (fail-safe)")
+        serviceJob?.cancel()
+        // Fail-safe teardown: must land before process death (S1-06), but bounded
+        // so a contended system_server cannot stall the main thread into an ANR.
+        teardownSynchronously()
+        // DataStore bookkeeping is best-effort on a detached scope: if the write
+        // races with process death, launch-time reconciliation clears the residual.
+        GlobalScope.launch(Dispatchers.IO + NonCancellable) {
+            settingsRepository.setLastAppliedLimitBytes(UNLIMITED)
+            settingsRepository.setServiceEnabled(false)
+        }
+        ThrottleTileService.requestTileUpdate(this)
+        stopSelf()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "Service onDestroy")
         _isRunning.value = false
         serviceJob?.cancel()
-        testTimerJob?.cancel()
         networkMonitor.stopMonitoring()
-        bandwidthController.resetToDefault()
-
-        CoroutineScope(Dispatchers.IO).launch {
+        // Synchronous teardown: the reset must land before process death (S1-06).
+        teardownSynchronously()
+        GlobalScope.launch(Dispatchers.IO + NonCancellable) {
+            settingsRepository.setLastAppliedLimitBytes(UNLIMITED)
             settingsRepository.setServiceEnabled(false)
         }
         ThrottleTileService.requestTileUpdate(this)
+    }
+
+    /**
+     * Kernel-level teardown executed on the calling (main) thread with a hard
+     * timeout: a write through SettingsProvider is a synchronous binder call and
+     * an unbounded join here is a known ANR source under heavy system load.
+     */
+    private fun teardownSynchronously() {
+        runCatching {
+            runBlocking(Dispatchers.IO) {
+                withTimeout(TEARDOWN_TIMEOUT_MS) {
+                    bandwidthController.resetToDefault()
+                }
+            }
+        }.onFailure { e ->
+            Log.e(TAG, "Teardown timed out; relying on launch-time reconciliation", e)
+        }
     }
 }
 

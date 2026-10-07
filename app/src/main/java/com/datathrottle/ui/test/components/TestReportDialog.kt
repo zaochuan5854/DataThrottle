@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -21,13 +22,14 @@ fun TestReportDialog(
     state: TestState,
     onDismiss: () -> Unit
 ) {
+    val verified = state.isThrottlingVerified == true
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
             Icon(
-                imageVector = Icons.Default.CheckCircle,
+                imageVector = if (verified) Icons.Default.CheckCircle else Icons.Default.ReportProblem,
                 contentDescription = null,
-                tint = Color(0xFF00E676),
+                tint = if (verified) Color(0xFF00E676) else Color(0xFFEF4444),
                 modifier = Modifier.size(36.dp)
             )
         },
@@ -41,16 +43,36 @@ fun TestReportDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = stringResource(R.string.test_report_status),
+                    text = stringResource(
+                        if (verified) R.string.test_report_status_verified
+                        else R.string.test_report_status_failed
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = if (verified) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.error
                 )
                 HorizontalDivider(modifier = Modifier.alpha(0.2f))
                 Text(
                     text = stringResource(R.string.test_report_speed, state.averageSpeedKbps),
                     style = MaterialTheme.typography.bodyMedium
                 )
+                if (state.targetKbps > 0f) {
+                    Text(
+                        text = stringResource(R.string.test_report_target, state.targetKbps),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                if (!verified) {
+                    Text(
+                        text = stringResource(
+                            if (state.shapingExemptTransport) R.string.test_report_transport_exempt
+                            else R.string.test_report_failed_hint
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         },
         confirmButton = {

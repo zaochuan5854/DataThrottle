@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -31,7 +32,11 @@ class SettingsRepository(private val context: Context) {
         private val BANDWIDTH_LIMIT_MBPS = floatPreferencesKey("bandwidth_limit_mbps")
         private val APP_THEME = stringPreferencesKey("app_theme")
         private val SERVICE_ENABLED = booleanPreferencesKey("service_enabled")
+        private val LAST_APPLIED_LIMIT_BYTES = longPreferencesKey("last_applied_limit_bytes")
         private const val DEFAULT_LIMIT_MBPS = 1.0f // 1.0 Mbps (125 KB/s)
+
+        /** -1 means "no limit is currently applied". */
+        const val NO_LIMIT = -1L
     }
 
     val bandwidthLimitMbps: Flow<Float> = context.dataStore.data
@@ -49,6 +54,16 @@ class SettingsRepository(private val context: Context) {
             preferences[SERVICE_ENABLED] ?: false
         }
 
+    /**
+     * The last limit the service successfully wrote to `Settings.Global`.
+     * A non-(-1) value means the device is throttled right now; used by the
+     * fail-safe paths (task removal, boot, app launch) to clear leftovers.
+     */
+    val lastAppliedLimitBytes: Flow<Long> = context.dataStore.data
+        .map { preferences ->
+            preferences[LAST_APPLIED_LIMIT_BYTES] ?: NO_LIMIT
+        }
+
     suspend fun setBandwidthLimitMbps(limit: Float) {
         context.dataStore.edit { preferences ->
             preferences[BANDWIDTH_LIMIT_MBPS] = limit
@@ -64,6 +79,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setServiceEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[SERVICE_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setLastAppliedLimitBytes(bytesPerSecond: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[LAST_APPLIED_LIMIT_BYTES] = bytesPerSecond
         }
     }
 }

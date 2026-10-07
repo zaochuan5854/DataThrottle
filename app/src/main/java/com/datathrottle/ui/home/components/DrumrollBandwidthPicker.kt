@@ -10,7 +10,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,12 +30,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.datathrottle.R
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DrumrollBandwidthPicker(
     currentLimit: Float,
     onUpdateLimit: (Float) -> Unit,
+    isReady: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val items = remember {
@@ -63,12 +68,29 @@ fun DrumrollBandwidthPicker(
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
     val snapFlingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
 
+    // S1-02: the list must align to the persisted value only once it is known
+    // (isReady), and index changes before that moment are not user changes.
+    var aligned by remember { mutableStateOf(false) }
+    LaunchedEffect(isReady, currentLimit) {
+        if (isReady && !aligned) {
+            val idx = items.indexOfFirst { kotlin.math.abs(it - currentLimit) < 0.05f }
+            if (idx >= 0) {
+                listState.scrollToItem(idx)
+            }
+            aligned = true
+        }
+    }
+
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex }
             .distinctUntilChanged()
+            .filter { isReady && aligned }
             .collect { index ->
                 if (index in items.indices) {
-                    onUpdateLimit(items[index])
+                    val picked = items[index]
+                    if (picked != currentLimit) {
+                        onUpdateLimit(picked)
+                    }
                 }
             }
     }

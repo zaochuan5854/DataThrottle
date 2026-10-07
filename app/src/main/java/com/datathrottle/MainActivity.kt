@@ -15,6 +15,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavEntry
@@ -33,6 +35,27 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (BuildConfig.DEBUG) {
+            com.datathrottle.debug.DebugFlags.init(this)
+            android.util.Log.d("MainActivity", "focus observer registering")
+            // Focus policy: the cellular-spoof flag is meaningful only while
+            // the app is in the user's focus. On focus loss the device must
+            // report its real network type again (wifi is wifi, cellular is
+            // cellular) — never spoof an unseen device's connectivity.
+            lifecycle.addObserver(
+                androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP &&
+                        com.datathrottle.debug.DebugFlags.forceCellular.value
+                    ) {
+                        com.datathrottle.debug.DebugFlags.setForceCellular(false)
+                        android.util.Log.d(
+                            "MainActivity",
+                            "Focus lost: cellular spoof disabled"
+                        )
+                    }
+                }
+            )
+        }
         enableEdgeToEdge()
         setContent {
             val viewModel: MainViewModel = viewModel()
@@ -46,7 +69,8 @@ class MainActivity : ComponentActivity() {
 
             DataThrottleTheme(darkTheme = darkTheme) {
                 Surface(
-                    modifier = Modifier.fillMaxSize(),
+                    // Expose Compose testTags as uiautomator resource-ids for ADB automation
+                    modifier = Modifier.fillMaxSize().semantics { testTagsAsResourceId = true },
                     color = MaterialTheme.colorScheme.background
                 ) {
                     DataThrottleApp(viewModel = viewModel)

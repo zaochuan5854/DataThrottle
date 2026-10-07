@@ -110,7 +110,8 @@ fun HomeScreen(
 
                 DrumrollBandwidthPicker(
                     currentLimit = uiState.bandwidthLimitMbps,
-                    onUpdateLimit = onUpdateLimit
+                    onUpdateLimit = onUpdateLimit,
+                    isReady = uiState.settingsLoaded
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))

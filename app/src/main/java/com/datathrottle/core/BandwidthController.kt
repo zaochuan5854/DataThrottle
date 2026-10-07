@@ -12,6 +12,20 @@ class BandwidthController(private val contentResolver: ContentResolver) {
     }
 
     /**
+     * Reads back the currently installed ingress rate limit (bytes/s),
+     * or -1 when no cap is installed. Used to confirm a limit is live
+     * before starting throughput measurements.
+     */
+    fun currentIngressRateLimit(): Long {
+        return try {
+            Settings.Global.getLong(contentResolver, INGRESS_RATE_LIMIT_KEY, -1L)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read ingress rate limit", e)
+            -1L
+        }
+    }
+
+    /**
      * Sets the ingress rate limit in bytes per second.
      * Requires WRITE_SECURE_SETTINGS permission.
      */

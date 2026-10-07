@@ -59,7 +59,9 @@ fun ScanlineDisplayView(
 
             // Draw image clipped to progress
             if (bitmap != null && progress > 0f) {
-                val clipBottom = canvasHeight * progress
+                // A partial (top-band) decode already represents "arrived
+                // bytes only"; the scanline view must not clip it again.
+                val clipBottom = if (state.partialImage) canvasHeight else canvasHeight * progress
 
                 clipRect(
                     left = 0f,
@@ -67,12 +69,22 @@ fun ScanlineDisplayView(
                     right = canvasWidth,
                     bottom = clipBottom
                 ) {
+                    // Preserve the source aspect ratio and center it (S3-05)
+                    val scale = minOf(
+                        canvasWidth / bitmap.width.toFloat(),
+                        canvasHeight / bitmap.height.toFloat()
+                    )
+                    val dstWidth = bitmap.width * scale
+                    val dstHeight = bitmap.height * scale
                     drawImage(
                         image = bitmap,
                         srcOffset = IntOffset.Zero,
                         srcSize = IntSize(bitmap.width, bitmap.height),
-                        dstOffset = IntOffset.Zero,
-                        dstSize = IntSize(canvasWidth.toInt(), canvasHeight.toInt())
+                        dstOffset = IntOffset(
+                            ((canvasWidth - dstWidth) / 2f).toInt(),
+                            ((canvasHeight - dstHeight) / 2f).toInt()
+                        ),
+                        dstSize = IntSize(dstWidth.toInt(), dstHeight.toInt())
                     )
                 }
 

@@ -75,6 +75,9 @@ fun MainScreen(
 
     LifecycleResumeEffect(Unit) {
         viewModel.refreshState()
+        // Fail-safe (S1-06): clear a throttling cap left behind by an abrupt kill
+        // every time the app comes to the foreground.
+        viewModel.reconcileResidualLimit()
         onPauseOrDispose {}
     }
 

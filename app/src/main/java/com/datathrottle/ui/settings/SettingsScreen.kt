@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.datathrottle.BuildConfig
 import com.datathrottle.R
 import com.datathrottle.data.AppTheme
+import com.datathrottle.debug.DebugSettingsSection
 import com.datathrottle.ui.settings.components.LanguageSelectionDialog
 import com.datathrottle.ui.settings.components.SettingsItemRow
 import com.datathrottle.ui.settings.components.ThemeSelectionDialog
@@ -264,6 +265,11 @@ fun SettingsScreen(
                     ),
                     color = MaterialTheme.colorScheme.onSurface
                 )
+            }
+
+            // デバッグ専用セクション（DebugInjector pattern: release では空実装）
+            if (BuildConfig.DEBUG) {
+                DebugSettingsSection()
             }
 
             // バージョン情報

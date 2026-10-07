@@ -22,3 +22,6 @@ local.properties
 *.key
 signing.properties
 *secrets*.txt
+
+# Installed agent skills (external git checkouts, see AGENTS.md §2)
+/.opencode/

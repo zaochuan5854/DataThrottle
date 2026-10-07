@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only manifest overlay: exports BandwidthControlService for the adb shell
+  user (guarded by android.permission.DUMP) so E2E verification recipes can
+  trigger diagnostic limit actions with `am start-foreground-service`.
+  This overlay is not present in release builds.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <service
+            android:name=".service.BandwidthControlService"
+            android:exported="true"
+            android:permission="android.permission.DUMP"
+            tools:replace="android:exported" />
+    </application>
+
+</manifest>

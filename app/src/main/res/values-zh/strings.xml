@@ -36,6 +36,8 @@
     <string name="status_unlimited">Unlimited</string>
     <string name="status_unlimited_wifi">Unlimited (Wi-Fi)</string>
     <string name="status_unlimited_disabled">Disabled</string>
+    <string name="status_not_enforced">未生效 — 需要权限</string>
+    <string name="status_not_enforced_desc">已请求限制但未能生效。请授予 WRITE_SECURE_SETTINGS 权限以启用限速。</string>
     <string name="status_desc_cellular">您的蜂窝移动网络\n已限制为 %s。</string>
     <string name="status_desc_wifi">您的 Wi-Fi 网络连接\n不受限制。</string>
     <string name="status_desc_disabled">您的互联网连接\n未受限制。</string>
@@ -81,9 +83,15 @@
     <string name="test_speed_format">速度: %.0f kbps</string>
     <string name="test_report_title">测试完成</string>
     <string name="test_report_speed">平均速度: %.0f kbps</string>
-    <string name="test_report_status">状态: 已成功验证限速效果（通过）</string>
+    <string name="test_report_status_verified">状态: 已成功验证限速效果（通过）</string>
+    <string name="test_report_status_failed">状态: 未应用限速（失败）</string>
+    <string name="test_report_target">目标: %.0f kbps</string>
+    <string name="test_report_failed_hint">实测速度远超限制值。请检查 WRITE_SECURE_SETTINGS 权限、服务状态和限速路径。</string>
+    <string name="test_report_transport_exempt">本次下载运行在本应用自身的 uid 上，而系统整形不作用于该 uid，因此无法以此方式测量限速。请启动 Shizuku 后重试，即可在受整形的 shell uid 上准确测量。</string>
+    <string name="tile_start_failed">后台启动被系统阻止。请打开 DataThrottle 切换带宽限制。</string>
     <string name="test_error_title">测试出错</string>
     <string name="test_error_message">从网络获取测试数据失败，请检查您的网络连接。</string>
+    <string name="test_error_limit_not_applied">未能在 3 秒内确认 100 kbps 限制已应用，测试未启动。请检查 WRITE_SECURE_SETTINGS 权限和服务状态。</string>
     <string name="btn_close">关闭</string>
 
     <!-- Permission Setup Screen & Guidance -->

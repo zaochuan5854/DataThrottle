@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import com.datathrottle.core.BandwidthController
 import com.datathrottle.data.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +37,16 @@ class BootReceiver : BroadcastReceiver() {
                             context.startForegroundService(serviceIntent)
                         } else {
                             context.startService(serviceIntent)
+                        }
+                    } else {
+                        // Fail-safe (S1-06): the service is off, so nothing may stay throttled.
+                        val lastApplied = settingsRepository.lastAppliedLimitBytes.first()
+                        if (lastApplied != SettingsRepository.NO_LIMIT) {
+                            val result = BandwidthController(context.contentResolver).resetToDefault()
+                            if (result.isSuccess) {
+                                settingsRepository.setLastAppliedLimitBytes(SettingsRepository.NO_LIMIT)
+                            }
+                            Log.w(TAG, "Boot reconcile: cleared residual limit $lastApplied (result=$result)")
                         }
                     }
                 } catch (e: Exception) {

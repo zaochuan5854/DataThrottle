@@ -3,12 +3,14 @@ package com.datathrottle.core
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
+import kotlin.concurrent.thread
 import rikka.shizuku.Shizuku
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import java.util.concurrent.TimeUnit
 
 enum class ShizukuStatus {
     NOT_INSTALLED,
@@ -110,16 +112,17 @@ class ShizukuManager(private val context: Context) {
         }
     }
 
-    fun grantWriteSecureSettings(): Boolean {
+    /**
+     * Runs a command through Shizuku (shell uid) and returns the live
+     * [Process] for stream access, or null when Shizuku is unavailable.
+     * The diagnostic uses this to measure throughput on a uid that the
+     * system shaping governs: shell uid is shaped (verified on device),
+     * DownloadProvider (uid 10099) and the app's own uid are not.
+     */
+    fun runCommand(args: List<String>): Process? {
         if (checkStatus() != ShizukuStatus.RUNNING) {
-            Log.e(TAG, "Shizuku is not running or not authorized")
-            return false
+            return null
         }
-
-        val packageName = context.packageName
-        val command = "pm grant $packageName android.permission.WRITE_SECURE_SETTINGS"
-        Log.d(TAG, "Executing via Shizuku: $command")
-
         return try {
             val newProcessMethod = Shizuku::class.java.getDeclaredMethod(
                 "newProcess",
@@ -128,17 +131,49 @@ class ShizukuManager(private val context: Context) {
                 String::class.java
             )
             newProcessMethod.isAccessible = true
-            val process = newProcessMethod.invoke(
-                null,
-                arrayOf("sh", "-c", command),
-                null,
-                null
-            ) as Process
+            newProcessMethod.invoke(null, args.toTypedArray(), null, null) as Process
+        } catch (e: Exception) {
+            Log.e(TAG, "Shizuku execution failed", e)
+            null
+        }
+    }
 
-            val exitCode = process.waitFor()
+    /**
+     * Grants WRITE_SECURE_SETTINGS through Shizuku (S1-08): runs off the
+     * main thread, drains stdout/stderr concurrently (never after
+     * `waitFor`, which is the classic pipe-buffer deadlock order), bounds
+     * the wait, and destroys the process when it overruns.
+     */
+    suspend fun grantWriteSecureSettings(): Boolean = withContext(Dispatchers.IO) {
+        if (checkStatus() != ShizukuStatus.RUNNING) {
+            Log.e(TAG, "Shizuku is not running or not authorized")
+            return@withContext false
+        }
 
-            val output = BufferedReader(InputStreamReader(process.inputStream)).use { it.readText() }
-            val error = BufferedReader(InputStreamReader(process.errorStream)).use { it.readText() }
+        val packageName = context.packageName
+        val command = "pm grant $packageName android.permission.WRITE_SECURE_SETTINGS"
+        Log.d(TAG, "Executing via Shizuku: $command")
+
+        val process = runCommand(listOf("sh", "-c", command)) ?: return@withContext false
+        try {
+            val output = StringBuilder()
+            val error = StringBuilder()
+            val readers = listOf(
+                thread(start = true) {
+                    runCatching { process.inputStream.bufferedReader().use { output.append(it.readText()) } }
+                },
+                thread(start = true) {
+                    runCatching { process.errorStream.bufferedReader().use { error.append(it.readText()) } }
+                }
+            )
+            val exitCode = if (process.waitFor(10, TimeUnit.SECONDS)) {
+                readers.forEach { it.join(2000) }
+                process.exitValue()
+            } else {
+                Log.e(TAG, "Shizuku command timed out; destroying process")
+                process.destroyForcibly()
+                -1
+            }
 
             if (output.isNotEmpty()) Log.d(TAG, "Shizuku Output: $output")
             if (error.isNotEmpty()) Log.e(TAG, "Shizuku Error: $error")
@@ -146,6 +181,7 @@ class ShizukuManager(private val context: Context) {
             exitCode == 0
         } catch (e: Exception) {
             Log.e(TAG, "Shizuku execution failed", e)
+            runCatching { process.destroy() }
             false
         }
     }

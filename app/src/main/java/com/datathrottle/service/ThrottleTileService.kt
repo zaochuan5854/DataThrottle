@@ -7,6 +7,9 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import android.util.Log
+import android.widget.Toast
+import com.datathrottle.MainActivity
 import com.datathrottle.R
 import com.datathrottle.data.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
@@ -55,10 +58,25 @@ class ThrottleTileService : TileService() {
 
         val intent = Intent(this, BandwidthControlService::class.java)
         if (nextState) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
+            // S2-07: a QS tile click happens with the app in the background;
+            // API 34+ can reject the foreground-service start. Never let the
+            // exception escape the tile process — report it and open the app.
+            val started = runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(intent)
+                } else {
+                    startService(intent)
+                }
+            }
+            if (started.isFailure) {
+                Log.e(TAG, "QS tile: service start rejected", started.exceptionOrNull())
+                Toast.makeText(this, R.string.tile_start_failed, Toast.LENGTH_SHORT).show()
+                runCatching {
+                    startActivity(
+                        Intent(this, MainActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
             }
         } else {
             stopService(intent)
@@ -90,6 +108,8 @@ class ThrottleTileService : TileService() {
     }
 
     companion object {
+        private const val TAG = "ThrottleTileService"
+
         fun requestTileUpdate(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 try {
