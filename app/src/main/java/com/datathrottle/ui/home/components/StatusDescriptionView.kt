@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.datathrottle.R
 import com.datathrottle.core.NetworkType
+import com.datathrottle.core.formatMbps
 
 @Composable
 fun StatusDescriptionView(
@@ -25,7 +26,7 @@ fun StatusDescriptionView(
     limitMbps: Float,
     modifier: Modifier = Modifier
 ) {
-    val formattedLimit = if (limitMbps < 1.0f) String.format("%.1f Mbps", limitMbps) else if (limitMbps % 1.0f == 0f) String.format("%.0f Mbps", limitMbps) else String.format("%.1f Mbps", limitMbps)
+    val formattedLimit = formatMbps(limitMbps)
 
     val statusText: String
     val descText: String

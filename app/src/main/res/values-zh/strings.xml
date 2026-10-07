@@ -32,16 +32,16 @@
     <string name="status_none">未连接</string>
     <string name="service_status_running">服务: 运行中</string>
     <string name="service_status_stopped">服务: 已停止</string>
-    <string name="status_limited_to">Limited to %s</string>
-    <string name="status_unlimited">Unlimited</string>
-    <string name="status_unlimited_wifi">Unlimited (Wi-Fi)</string>
-    <string name="status_unlimited_disabled">Disabled</string>
+    <string name="status_limited_to">已限制为 %s</string>
+    <string name="status_unlimited">无限制</string>
+    <string name="status_unlimited_wifi">无限制（Wi-Fi）</string>
+    <string name="status_unlimited_disabled">已禁用</string>
     <string name="status_not_enforced">未生效 — 需要权限</string>
     <string name="status_not_enforced_desc">已请求限制但未能生效。请授予 WRITE_SECURE_SETTINGS 权限以启用限速。</string>
     <string name="status_desc_cellular">您的蜂窝移动网络\n已限制为 %s。</string>
     <string name="status_desc_wifi">您的 Wi-Fi 网络连接\n不受限制。</string>
     <string name="status_desc_disabled">您的互联网连接\n未受限制。</string>
-    <string name="label_bandwidth_limit">Bandwidth Limit</string>
+    <string name="label_bandwidth_limit">带宽限制</string>
     <string name="label_service_toggle">启用控制服务</string>
 
     <!-- Settings Screen -->

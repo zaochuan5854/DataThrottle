@@ -21,6 +21,7 @@ import com.datathrottle.R
 import com.datathrottle.core.BandwidthController
 import com.datathrottle.core.NetworkMonitor
 import com.datathrottle.core.NetworkType
+import com.datathrottle.core.formatMbps
 import com.datathrottle.data.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -324,7 +325,7 @@ class BandwidthControlService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val formattedLimit = if (limitMbps < 1.0f) String.format("%.1f Mbps", limitMbps) else if (limitMbps % 1.0f == 0f) String.format("%.0f Mbps", limitMbps) else String.format("%.1f Mbps", limitMbps)
+        val formattedLimit = formatMbps(limitMbps)
 
         val title = when {
             notEnforced -> getString(R.string.status_not_enforced)

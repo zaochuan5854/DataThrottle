@@ -32,16 +32,16 @@
     <string name="status_none">未接続</string>
     <string name="service_status_running">サービス: 実行中</string>
     <string name="service_status_stopped">サービス: 停止中</string>
-    <string name="status_limited_to">Limited to %s</string>
-    <string name="status_unlimited">Unlimited</string>
-    <string name="status_unlimited_wifi">Unlimited (Wi-Fi)</string>
-    <string name="status_unlimited_disabled">Disabled</string>
+    <string name="status_limited_to">%s に制限中</string>
+    <string name="status_unlimited">無制限</string>
+    <string name="status_unlimited_wifi">無制限(Wi-Fi)</string>
+    <string name="status_unlimited_disabled">無効</string>
     <string name="status_not_enforced">適用されていません — 権限が必要</string>
     <string name="status_not_enforced_desc">制限を要求しましたが適用できませんでした。スロットルを有効にするには WRITE_SECURE_SETTINGS 権限を許可してください。</string>
     <string name="status_desc_cellular">お使いのモバイル通信は\n%s に制限されています。</string>
     <string name="status_desc_wifi">お使いのWi-Fi通信は\n無制限です。</string>
     <string name="status_desc_disabled">お使いのインターネットは\n制限されていません。</string>
-    <string name="label_bandwidth_limit">Bandwidth Limit</string>
+    <string name="label_bandwidth_limit">帯域制限</string>
     <string name="label_service_toggle">制御サービスを有効化</string>
 
     <!-- Settings Screen -->

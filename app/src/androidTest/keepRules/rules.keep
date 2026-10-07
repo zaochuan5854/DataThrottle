@@ -1,0 +1,13 @@
+# R8 keep rules for the androidTest component (AGP 9 keepRules convention).
+# espresso transitively pulls errorprone annotations that reference the JDK's
+# javax.lang.model, which does not exist on Android (S2-04 device run).
+-dontwarn javax.lang.model.**
+
+# The instrumentation entry points (runner + JUnit4 test classes) are loaded
+# reflectively by androidx.test; without this the shrunk test APK crashes with
+# ClassNotFoundException (kotlin.LazyKt) and reports "0 tests". Test APK size
+# is irrelevant — keep everything.
+-keep class ** { *; }
+-keep class kotlin.** { *; }
+-keep class androidx.test.** { *; }
+-dontobfuscate

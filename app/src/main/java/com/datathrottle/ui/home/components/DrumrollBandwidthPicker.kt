@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.datathrottle.R
+import com.datathrottle.core.formatMbpsValue
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 
@@ -168,7 +169,7 @@ fun DrumrollBandwidthPicker(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (value < 1.0f) String.format("%.1f", value) else if (value % 1.0f == 0f) String.format("%.0f", value) else String.format("%.1f", value),
+                                text = formatMbpsValue(value),
                                 style = MaterialTheme.typography.displayLarge.copy(
                                     fontWeight = FontWeight.Black,
                                     fontSize = 90.sp,

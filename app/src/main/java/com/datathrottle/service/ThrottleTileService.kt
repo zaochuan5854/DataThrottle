@@ -12,6 +12,7 @@ import android.widget.Toast
 import com.datathrottle.MainActivity
 import com.datathrottle.R
 import com.datathrottle.data.SettingsRepository
+import com.datathrottle.core.formatMbps
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -91,7 +92,7 @@ class ThrottleTileService : TileService() {
 
     private fun updateTile(isRunning: Boolean, limitMbps: Float) {
         val tile = qsTile ?: return
-        val formattedLimit = if (limitMbps < 1.0f) String.format("%.1f Mbps", limitMbps) else if (limitMbps % 1.0f == 0f) String.format("%.0f Mbps", limitMbps) else String.format("%.1f Mbps", limitMbps)
+        val formattedLimit = formatMbps(limitMbps)
 
         if (isRunning) {
             tile.state = Tile.STATE_ACTIVE

@@ -4,6 +4,10 @@
 # For more details, see
 #   https://d.android.com/r/tools/r8/keep-rules
 
+# Instrumented tests share the app's classloader: androidx.test calls kotlin
+# stdlib members the app itself never uses (S2-04 device run).
+-keep class kotlin.** { *; }
+
 # If your project uses WebView with JS, uncomment the following
 # and specify the fully qualified class name to the JavaScript interface
 # class:
