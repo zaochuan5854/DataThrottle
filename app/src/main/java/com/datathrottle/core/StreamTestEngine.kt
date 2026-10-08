@@ -84,15 +84,58 @@ class StreamTestEngine(
     companion object {
         private const val TAG = "StreamTestEngine"
         const val TARGET_RATE_BYTES_PER_SEC = 12500L // 100 kbps (12.5 KB/s)
-        // E7: ≥1 MB object so the transfer exits the shaper's ≈100 KB burst
-        // window; 1,075,580 B baseline JPEG ≈ 86 s at the 100 kbps cap.
-        const val DEFAULT_TEST_IMAGE_URL = "https://files.catbox.moe/n0ra4w.jpg"
+
+        // Test object: ~397 KB baseline JPEG, Wikimedia Commons, public domain
+        // (Dave Menke / USFWS). Deliberate sizing (docs/VERIFICATION.md E7):
+        // the shaper is a token bucket with a ≈100 KB burst allowance, so the
+        // object must exceed the burst by several seconds of capped transfer
+        // (≈300 KB ⇒ ≈24 s at the 100 kbps cap). The verdict excludes the
+        // burst window (BurstWindow), which is what lets the object be this
+        // small — an 82 KB image can never leave the burst and proves nothing.
+        const val DEFAULT_TEST_IMAGE_URL =
+            "https://upload.wikimedia.org/wikipedia/commons/8/8c/" +
+            "Sunrise_at_lake_mountains_in_background_reflected_on_lake.jpg"
         const val ASSET_FALLBACK_PATH = "diagnostic/peppers_test.jpg"
 
         private const val READ_BUFFER_SIZE = 4096
         private const val UI_UPDATE_INTERVAL_MS = 100L
-        private const val MAX_TEST_DURATION_MS = 150_000L
+        private const val MAX_TEST_DURATION_MS = 90_000L
         private const val MIN_BYTES_FOR_REGION = 2048L
+
+        // Bytes transferred before this are assumed to ride the token-bucket
+        // burst (E7 control: burst drains in well under a second at full
+        // speed); the verdict averages only the window after it.
+        const val BURST_GRACE_MS = 3_000L
+    }
+
+    /**
+     * Tracks bytes transferred after the shaper burst drains, so the verdict
+     * measures the *sustained* rate, not the burst-inflated whole-transfer
+     * average (S2-12 lesson: small transfers / full-window averages proved
+     * nothing). Internal + top-level for unit testing.
+     */
+    internal class BurstWindow(private val graceMs: Long = BURST_GRACE_MS) {
+        private var baseBytes = -1L
+        private var baseNanos = 0L
+
+        fun sample(elapsedMs: Long, bytes: Long, nowNanos: Long) {
+            if (baseBytes < 0L && elapsedMs >= graceMs) {
+                baseBytes = bytes
+                baseNanos = nowNanos
+            }
+        }
+
+        /**
+         * Sustained kbps over [grace, end]; null when no window exists — the
+         * whole object rode the burst, so the cap was never exercised and no
+         * verdict is possible.
+         */
+        fun sustainedKbps(endNanos: Long, endBytes: Long): Float? {
+            if (baseBytes < 0L) return null
+            val secs = (endNanos - baseNanos) / 1_000_000_000f
+            if (secs < 0.5f) return null
+            return ((endBytes - baseBytes) * 8f) / secs / 1000f
+        }
     }
 
     private val _testState = MutableStateFlow(TestState())
@@ -234,6 +277,7 @@ class StreamTestEngine(
         var totalRead = 0L
         var targetTotal = 0L
         var magicChecked = false
+        val burstWindow = BurstWindow()
 
         while (true) {
             delay(UI_UPDATE_INTERVAL_MS)
@@ -275,6 +319,7 @@ class StreamTestEngine(
 
             if (now - lastUiNanos >= UI_UPDATE_INTERVAL_MS * 1_000_000L) {
                 val elapsedMs = (now - startTime) / 1_000_000L
+                burstWindow.sample(elapsedMs, totalRead, now)
                 val avgKbps = if (elapsedMs > 0) (totalRead * 8f) / (elapsedMs / 1000f) / 1000f else 0f
                 val progress = if (targetTotal > 0) {
                     (totalRead.toFloat() / targetTotal.toFloat()).coerceIn(0f, 1f)
@@ -310,7 +355,8 @@ class StreamTestEngine(
             }
         }
 
-        val finalElapsedMs = ((System.nanoTime() - startTime) / 1_000_000L).coerceAtLeast(1L)
+        val endNanos = System.nanoTime()
+        val finalElapsedMs = ((endNanos - startTime) / 1_000_000L).coerceAtLeast(1L)
         val finalAvgKbps = (totalRead * 8f) / (finalElapsedMs / 1000f) / 1000f
         val data = readDelimitedBytes(dest, totalRead)
         val full = BitmapFactory.decodeByteArray(data, 0, data.size)?.asImageBitmap()
@@ -319,9 +365,14 @@ class StreamTestEngine(
             return false
         }
 
-        // The provider uid is shaping-governed (E7), so the band check is a real verdict.
-        val verified = targetKbps > 0f &&
-            finalAvgKbps >= targetKbps * 0.4f && finalAvgKbps <= targetKbps * 1.6f
+        // The provider uid is shaping-governed (E7). The verdict uses the
+        // sustained rate after the token-bucket burst drains (BurstWindow);
+        // a null window means the whole object rode the burst — the cap was
+        // never exercised, so the honest outcome is "not verified" (S2-12).
+        val sustainedKbps = burstWindow.sustainedKbps(endNanos, totalRead)
+        val measuredKbps = sustainedKbps ?: finalAvgKbps
+        val verified = sustainedKbps != null && targetKbps > 0f &&
+            measuredKbps >= targetKbps * 0.4f && measuredKbps <= targetKbps * 1.6f
 
         val finalState = _testState.value.copy(
             status = TestStatus.COMPLETED,
@@ -330,7 +381,7 @@ class StreamTestEngine(
             progress = 1.0f,
             elapsedTimeMs = finalElapsedMs,
             currentSpeedKbps = 0f,
-            averageSpeedKbps = finalAvgKbps,
+            averageSpeedKbps = measuredKbps,
             targetKbps = targetKbps,
             isThrottlingVerified = verified,
             imageBitmap = full,
@@ -341,7 +392,7 @@ class StreamTestEngine(
         Log.d(
             TAG,
             "DownloadManager transport completed bytes=$totalRead elapsedMs=$finalElapsedMs " +
-                "avgKbps=$finalAvgKbps target=$targetKbps verified=$verified"
+                "avgKbps=$finalAvgKbps sustainedKbps=$sustainedKbps target=$targetKbps verified=$verified"
         )
         finishOnMain(onComplete, finalState)
         return true
@@ -394,6 +445,7 @@ class StreamTestEngine(
             var lastRegionAt = 0L
             var bandBitmap: ImageBitmap? = null
             var endedByDeadline = false
+            val burstWindow = BurstWindow()
 
             while (true) {
                 val read = input.read(buffer)
@@ -427,6 +479,7 @@ class StreamTestEngine(
                         windowBytes = 0L
                     }
                     val elapsedMs = (now - startTime) / 1_000_000L
+                    burstWindow.sample(elapsedMs, totalRead, now)
                     val avgKbps = if (elapsedMs > 0) (totalRead * 8f) / (elapsedMs / 1000f) / 1000f else 0f
                     val progress = if (targetTotal > 0) {
                         (totalRead.toFloat() / targetTotal.toFloat()).coerceIn(0f, 1f)
@@ -457,7 +510,8 @@ class StreamTestEngine(
                 }
             }
             input.close()
-            val finalElapsedMs = ((System.nanoTime() - startTime) / 1_000_000L).coerceAtLeast(1L)
+            val endNanos = System.nanoTime()
+            val finalElapsedMs = ((endNanos - startTime) / 1_000_000L).coerceAtLeast(1L)
             val finalAvgKbps = (totalRead * 8f) / (finalElapsedMs / 1000f) / 1000f
 
             val data = accumulator.toByteArray()
@@ -475,9 +529,12 @@ class StreamTestEngine(
                 return false
             }
 
-            // Shell uid is shaping-governed, so the band check is a real verdict.
-            val verified = completed && targetKbps > 0f &&
-                finalAvgKbps >= targetKbps * 0.4f && finalAvgKbps <= targetKbps * 1.6f
+            // Shell uid is shaping-governed; verdict on the post-burst sustained
+            // rate (see BurstWindow / S2-12 — full-transfer averages ride the burst).
+            val sustainedKbps = burstWindow.sustainedKbps(endNanos, totalRead)
+            val measuredKbps = sustainedKbps ?: finalAvgKbps
+            val verified = completed && sustainedKbps != null && targetKbps > 0f &&
+                measuredKbps >= targetKbps * 0.4f && measuredKbps <= targetKbps * 1.6f
 
             val finalState = _testState.value.copy(
                 status = TestStatus.COMPLETED,
@@ -486,7 +543,7 @@ class StreamTestEngine(
                 progress = 1.0f,
                 elapsedTimeMs = finalElapsedMs,
                 currentSpeedKbps = 0f,
-                averageSpeedKbps = finalAvgKbps,
+                averageSpeedKbps = measuredKbps,
                 targetKbps = targetKbps,
                 isThrottlingVerified = verified,
                 imageBitmap = full,
@@ -497,7 +554,7 @@ class StreamTestEngine(
             Log.d(
                 TAG,
                 "Shizuku transport completed bytes=$totalRead elapsedMs=$finalElapsedMs " +
-                    "avgKbps=$finalAvgKbps target=$targetKbps verified=$verified"
+                    "avgKbps=$finalAvgKbps sustainedKbps=$sustainedKbps target=$targetKbps verified=$verified"
             )
             finishOnMain(onComplete, finalState)
             true
