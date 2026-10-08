@@ -98,9 +98,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Triple(secure, notif, battery)
     }
 
+    // The toggle must read OFF while the 60 s unlimit window is open (S2-15):
+    // the service keeps running, but no cap is applied, so the home switch and
+    // status text must not claim a limit is in force.
+    private val serviceEnforcing = combine(
+        BandwidthControlService.isRunning,
+        BandwidthControlService.isPaused
+    ) { running, paused -> running && !paused }
+
     val uiState: StateFlow<MainUiState> = combine(
         networkMonitor.networkType,
-        BandwidthControlService.isRunning,
+        serviceEnforcing,
         settingsRepository.bandwidthLimitMbps,
         _isDiagnosticRunning,
         combine(shizukuManager.status, permissionsFlow, _settingsLoaded) { shizuku, perms, loaded ->

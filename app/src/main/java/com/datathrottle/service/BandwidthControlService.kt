@@ -87,6 +87,11 @@ class BandwidthControlService : Service() {
 
         private val _isRunning = MutableStateFlow(false)
         val isRunning = _isRunning.asStateFlow()
+
+        // 60 s unlimit window (notification toggle): the service keeps running,
+        // but the cap is off, so the home toggle must read OFF while paused.
+        private val _isPaused = MutableStateFlow(false)
+        val isPaused = _isPaused.asStateFlow()
     }
 
     override fun onCreate() {
@@ -269,6 +274,7 @@ class BandwidthControlService : Service() {
         pauseJob = null
         if (!paused) {
             paused = true
+            _isPaused.value = true
             pauseRemainingSec = (PAUSE_MS / 1000L).toInt()
             Log.d(TAG, "Throttle paused for ${PAUSE_MS / 1000} s")
             pauseJob = serviceScope.launch {
@@ -288,6 +294,7 @@ class BandwidthControlService : Service() {
                 }
                 pauseRemainingSec = 0
                 paused = false
+                _isPaused.value = false
                 pauseJob = null
                 Log.d(TAG, "Pause window elapsed: resuming throttle")
                 val m2 = settingsRepository.bandwidthLimitMbps.first()
@@ -295,6 +302,7 @@ class BandwidthControlService : Service() {
             }
         } else {
             paused = false
+            _isPaused.value = false
             pauseRemainingSec = 0
             Log.d(TAG, "Pause cancelled early: resuming throttle now")
             serviceScope.launch {
@@ -508,6 +516,7 @@ class BandwidthControlService : Service() {
         super.onDestroy()
         Log.d(TAG, "Service onDestroy")
         _isRunning.value = false
+        _isPaused.value = false
         serviceJob?.cancel()
         networkMonitor.stopMonitoring()
         // Synchronous teardown: the reset must land before process death (S1-06).
