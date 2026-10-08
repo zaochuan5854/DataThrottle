@@ -79,6 +79,10 @@
     <string name="test_card_title">100 kbps Scanline Test</string>
     <string name="btn_start_test">Start 100 kbps Test</string>
     <string name="btn_cancel_test">Cancel Test</string>
+    <string name="test_howto_title">About test behavior</string>
+    <string name="test_howto_line1">Right after start, the image is downloaded without any limit. This is the limiter\'s initial allowance and is normal behavior.</string>
+    <string name="test_howto_line2">Once it is used up, the 100 kbps limit applies and progress continues steadily.</string>
+    <string name="test_howto_line3">The test verifies, from the overall speed including the fast segment, that the limiter is working correctly.</string>
     <string name="test_running">Streaming at 100 kbps...</string>
     <string name="test_speed_format">Speed: %.0f kbps</string>
     <string name="test_report_title">Test Complete</string>

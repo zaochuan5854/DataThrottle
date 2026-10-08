@@ -79,6 +79,10 @@
     <string name="test_card_title">100 kbps スキャンライン テスト</string>
     <string name="btn_start_test">100 kbps テストを開始</string>
     <string name="btn_cancel_test">テストを中止</string>
+    <string name="test_howto_title">テストの動作について</string>
+    <string name="test_howto_line1">テスト開始直後、画像は制限無くダウンロードされます。これは制限の初期枠であり、正常な動作です。</string>
+    <string name="test_howto_line2">使い切ると 100 kbps の制限が効き、一定の速さで進みます。</string>
+    <string name="test_howto_line3">判定は、この速い区間も含めた全体の速度で、制限が正常に動作しているかを確認します。</string>
     <string name="test_running">100 kbps でストリーミング中...</string>
     <string name="test_speed_format">速度: %.0f kbps</string>
     <string name="test_report_title">テスト完了</string>
