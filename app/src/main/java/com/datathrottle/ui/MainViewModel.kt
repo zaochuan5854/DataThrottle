@@ -125,6 +125,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         initialValue = MainUiState()
     )
 
+    private val limitWrites = Channel<Float>(Channel.CONFLATED)
+
     init {
         networkMonitor.startMonitoring()
         // Gate the picker's write-back: the persisted limit must be known before any
@@ -139,14 +141,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // up an arbitrary mid-fling intermediate (home vs picker vs notification
         // all showing different numbers). CONFLATED keeps only the latest pending
         // value; one writer coroutine restores last-write-wins semantics.
+        // NOTE: limitWrites must be declared ABOVE this block (S2-13 crash: an
+        // init block referencing a later-declared property sees it as null).
         viewModelScope.launch {
             for (value in limitWrites) {
                 settingsRepository.setBandwidthLimitMbps(value)
             }
         }
     }
-
-    private val limitWrites = Channel<Float>(Channel.CONFLATED)
 
     /**
      * Clear a throttling cap that outlived the service (S1-06): if the persisted
