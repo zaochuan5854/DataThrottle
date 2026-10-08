@@ -136,4 +136,9 @@
     <string name="permission_missing">Permission: Missing</string>
     <string name="permission_error_title">Permission Error</string>
     <string name="permission_error_message">Missing WRITE_SECURE_SETTINGS permission. Bandwidth control failed.</string>
+
+    <!-- Debug diagnostics: shown when DebugFeatures is enabled
+         (default: debug builds; tap the version row 7x to toggle) -->
+    <string name="debug_force_cellular_title">Treat Wi-Fi as cellular</string>
+    <string name="debug_force_cellular_desc">Spoofs the network-type detection to cellular so the throttling cellular path (real enforcement) can be verified on a Wi-Fi-only device. It stays on for 5 minutes after the app loses focus, then turns off automatically (returning to the app cancels the timer).</string>
 </resources>

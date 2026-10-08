@@ -24,6 +24,8 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.datathrottle.data.AppTheme
+import com.datathrottle.core.DebugFeatures
+import com.datathrottle.debug.DebugFlags
 import com.datathrottle.debug.DebugSpoofFocusPolicy
 import com.datathrottle.navigation.MainRoute
 import com.datathrottle.ui.MainScreen
@@ -36,12 +38,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Debug-only: the cellular-spoof focus policy (5 min grace). Release
-        // builds resolve this to an inert no-op (DebugInjector pattern).
-        if (BuildConfig.DEBUG) {
-            com.datathrottle.debug.DebugFlags.init(this)
-            DebugSpoofFocusPolicy(this).attach()
-        }
+        // Debug diagnostics on every build; visibility is gated by the runtime
+        // DebugFeatures switch (release defaults to off, toggled by tapping the
+        // version row 7x). Loaded before the first composition so the settings
+        // screen never flashes the wrong state.
+        DebugFeatures.init(this)
+        DebugFlags.init(this)
+        DebugSpoofFocusPolicy(this).attach()
         enableEdgeToEdge()
         setContent {
             val viewModel: MainViewModel = viewModel()

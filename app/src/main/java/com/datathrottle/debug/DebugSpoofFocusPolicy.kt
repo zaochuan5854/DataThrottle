@@ -10,9 +10,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.datathrottle.core.DebugFeatures
 
 /**
- * Focus policy for the debug-only cellular spoof.
+ * Focus policy for the cellular-spoof switch.
  *
  * The spoof must not outlive the user's attention: while the app is not in the
  * user's focus the device should report its real network type again. Turning it
@@ -20,8 +21,9 @@ import kotlinx.coroutines.launch
  * (notification shade, quick settings) silently revert the type mid-verification.
  *
  * Policy: the flag survives [graceMs] after focus loss and is dropped
- * afterwards; returning to the app cancels the pending drop. This is the
- * debug-build implementation — release builds get a no-op with the same shape.
+ * afterwards; returning to the app cancels the pending drop. Active only while
+ * [DebugFeatures.enabled] is true — with the diagnostics switched off the policy
+ * does nothing, so a release install never watches the lifecycle.
  */
 class DebugSpoofFocusPolicy(
     private val lifecycleOwner: LifecycleOwner,
@@ -47,10 +49,25 @@ class DebugSpoofFocusPolicy(
 
     fun attach() {
         lifecycleOwner.lifecycle.addObserver(observer)
+        // The gate is dynamic: flipping the runtime switch off must stop the
+        // policy immediately, not at the next focus change.
+        scope.launch {
+            DebugFeatures.enabled.collect { enabled ->
+                if (enabled) {
+                    if (pendingDrop?.isActive == true) return@collect
+                    // (re)arm nothing here; ON_STOP schedules on its own.
+                } else if (pendingDrop?.isActive == true) {
+                    pendingDrop?.cancel()
+                    pendingDrop = null
+                    Log.d(TAG, "debug features off: pending spoof disable dropped")
+                }
+            }
+        }
         Log.d(TAG, "focus observer registered (grace=${graceMs / 60_000} min)")
     }
 
     private fun scheduleDrop() {
+        if (!DebugFeatures.enabled.value) return
         if (!DebugFlags.forceCellular.value) return
         pendingDrop?.cancel()
         pendingDrop = scope.launch {

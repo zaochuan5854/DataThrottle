@@ -135,4 +135,9 @@
     <string name="permission_missing">権限: 未取得</string>
     <string name="permission_error_title">権限エラー</string>
     <string name="permission_error_message">WRITE_SECURE_SETTINGS 権限がありません。帯域制限の適用に失敗しました。</string>
+
+    <!-- Debug diagnostics: shown when DebugFeatures is enabled
+         (default: debug builds; tap the version row 7x to toggle) -->
+    <string name="debug_force_cellular_title">Wi-Fi をセルラー通信として扱う</string>
+    <string name="debug_force_cellular_desc">通信種の判定を強制的にセルラーへ偽装します。帯域制限のセルラー経路（実際の制限適用）を Wi-Fi 環境で検証するためのスイッチです。アプリからフォーカスを失っても 5 分は維持され、5 分後に自動で無効になります（アプリに戻るとタイマーは取り消されます）。</string>
 </resources>

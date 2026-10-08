@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Build
 import android.os.LocaleList
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.datathrottle.BuildConfig
 import com.datathrottle.R
+import com.datathrottle.core.DebugFeatures
+import com.datathrottle.core.TapSequence
 import com.datathrottle.data.AppTheme
 import com.datathrottle.debug.DebugSettingsSection
 import com.datathrottle.ui.settings.components.LanguageSelectionDialog
@@ -267,15 +270,18 @@ fun SettingsScreen(
                 )
             }
 
-            // デバッグ専用セクション（DebugInjector pattern: release では空実装）
-            if (BuildConfig.DEBUG) {
-                DebugSettingsSection()
-            }
+            // デバッグセクションは実行時フラグ(DebugFeatures)で可視化される。
+            // 既定は debug ビルドのみ有効、release は 7 回タップで有効化。
+            DebugSettingsSection()
 
-            // バージョン情報
+            // バージョン情報(7 回連打でデバッグ機能フラグを反転)
+            val versionTaps = remember { TapSequence() }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clickable {
+                        if (versionTaps.register()) DebugFeatures.toggle()
+                    }
                     .padding(horizontal = 20.dp, vertical = 18.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
