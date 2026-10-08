@@ -2,5 +2,5 @@
 <resources>
     <string name="debug_section_title">Developer options (debug build only)</string>
     <string name="debug_force_cellular_title">Treat Wi-Fi as cellular</string>
-    <string name="debug_force_cellular_desc">Spoofs the network-type detection to cellular so the throttling cellular path (real enforcement) can be verified on a Wi-Fi-only device.</string>
+    <string name="debug_force_cellular_desc">Spoofs the network-type detection to cellular so the throttling cellular path (real enforcement) can be verified on a Wi-Fi-only device. It stays on for 5 minutes after the app loses focus, then turns off automatically (returning to the app cancels the timer).</string>
 </resources>

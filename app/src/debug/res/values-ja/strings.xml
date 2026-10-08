@@ -2,5 +2,5 @@
 <resources>
     <string name="debug_section_title">開発者向けオプション（デバッグビルド限定）</string>
     <string name="debug_force_cellular_title">Wi-Fi をセルラー通信として扱う</string>
-    <string name="debug_force_cellular_desc">通信種の判定を強制的にセルラーへ偽装します。帯域制限のセルラー経路（実際の制限適用）を Wi-Fi 環境で検証するためのスイッチです。</string>
+    <string name="debug_force_cellular_desc">通信種の判定を強制的にセルラーへ偽装します。帯域制限のセルラー経路（実際の制限適用）を Wi-Fi 環境で検証するためのスイッチです。アプリからフォーカスを失っても 5 分は維持され、5 分後に自動で無効になります（アプリに戻るとタイマーは取り消されます）。</string>
 </resources>

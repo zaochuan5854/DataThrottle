@@ -142,6 +142,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // cap held, no UI state). One job handle, cancelled on every stop path.
     private var testLaunchJob: Job? = null
 
+    // S2-18: service liveness captured when a test starts, so the teardown knows
+    // whether to reset the cap (service was running) or stop the test's own
+    // service instance (it was not).
+    private var diagnosticServiceWasRunning = false
+
     init {
         networkMonitor.startMonitoring()
         // Gate the picker's write-back: the persisted limit must be known before any
@@ -262,6 +267,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         val context = getApplication<Application>()
+        // S2-18: remember whether the user had the service running. The diagnostic
+        // start creates it; on teardown we must only *reset* the cap when it was
+        // already running, otherwise the reset intent re-creates and re-foregrounds
+        // a service the user had switched off (observed: cancelling a test with the
+        // service off turned throttling back on).
+        val serviceWasRunning = BandwidthControlService.isRunning.value
+        diagnosticServiceWasRunning = serviceWasRunning
         val intent = Intent(context, BandwidthControlService::class.java).apply {
             action = BandwidthControlService.ACTION_SET_DIAGNOSTIC
             putExtra(BandwidthControlService.EXTRA_LIMIT_BYTES, StreamTestEngine.TARGET_RATE_BYTES_PER_SEC)
@@ -271,8 +283,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _showTestError.value = false
 
         val resetIntent = Intent(context, BandwidthControlService::class.java).apply {
-            action = BandwidthControlService.ACTION_SET_DIAGNOSTIC
-            putExtra(BandwidthControlService.EXTRA_LIMIT_BYTES, -1L)
+            action = if (serviceWasRunning) {
+                BandwidthControlService.ACTION_SET_DIAGNOSTIC
+            } else {
+                // No service to reset: stop the one the test created (S1-03 pattern).
+                BandwidthControlService.ACTION_STOP_SERVICE
+            }
+            if (serviceWasRunning) {
+                putExtra(BandwidthControlService.EXTRA_LIMIT_BYTES, -1L)
+            }
         }
 
         // The kernel shaper governs connections opened *after* the cap is
@@ -331,9 +350,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         testLaunchJob = null
         streamTestEngine.cancelTest()
         val context = getApplication<Application>()
+        // S2-18: mirror the teardown rule -- reset the cap when the service was
+        // already running, otherwise stop the instance the test created instead
+        // of silently leaving throttling enabled.
         val resetIntent = Intent(context, BandwidthControlService::class.java).apply {
-            action = BandwidthControlService.ACTION_SET_DIAGNOSTIC
-            putExtra(BandwidthControlService.EXTRA_LIMIT_BYTES, -1L)
+            if (diagnosticServiceWasRunning) {
+                action = BandwidthControlService.ACTION_SET_DIAGNOSTIC
+                putExtra(BandwidthControlService.EXTRA_LIMIT_BYTES, -1L)
+            } else {
+                action = BandwidthControlService.ACTION_STOP_SERVICE
+            }
         }
         runCatching { ContextCompat.startForegroundService(context, resetIntent) }
             .onFailure { e -> Log.e(TAG, "Failed to clear diagnostic limit", e) }

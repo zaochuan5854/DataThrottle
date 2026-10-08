@@ -24,6 +24,8 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.datathrottle.data.AppTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.datathrottle.navigation.MainRoute
 import com.datathrottle.ui.MainScreen
 import com.datathrottle.ui.MainViewModel
@@ -33,25 +35,58 @@ import com.datathrottle.ui.theme.DataThrottleTheme
 class MainActivity : ComponentActivity() {
     private var mainViewModel: MainViewModel? = null
 
+    // Debug-only spoof focus policy (see onCreate).
+    private val spoofScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate
+    )
+    private var spoofDisableJob: kotlinx.coroutines.Job? = null
+
+    private companion object {
+        /** How long the debug cellular spoof survives focus loss before it is dropped. */
+        const val SPOOF_GRACE_MS = 5 * 60 * 1000L
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (BuildConfig.DEBUG) {
             com.datathrottle.debug.DebugFlags.init(this)
             android.util.Log.d("MainActivity", "focus observer registering")
-            // Focus policy: the cellular-spoof flag is meaningful only while
-            // the app is in the user's focus. On focus loss the device must
-            // report its real network type again (wifi is wifi, cellular is
-            // cellular) — never spoof an unseen device's connectivity.
+            // Focus policy (S2-17 follow-up): the cellular spoof must never keep
+            // running indefinitely in the background, but disabling it the instant
+            // focus is lost made short background trips (notification shade, quick
+            // settings) silently revert the network type to Wi-Fi mid-verification.
+            // Grace period: the flag survives SPOOF_GRACE_MS after focus loss and
+            // is dropped afterwards; returning to the app cancels the pending drop.
             lifecycle.addObserver(
                 androidx.lifecycle.LifecycleEventObserver { _, event ->
-                    if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP &&
-                        com.datathrottle.debug.DebugFlags.forceCellular.value
-                    ) {
-                        com.datathrottle.debug.DebugFlags.setForceCellular(false)
-                        android.util.Log.d(
-                            "MainActivity",
-                            "Focus lost: cellular spoof disabled"
-                        )
+                    when (event) {
+                        androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
+                            if (com.datathrottle.debug.DebugFlags.forceCellular.value) {
+                                spoofDisableJob?.cancel()
+                                spoofDisableJob = spoofScope.launch {
+                                    delay(SPOOF_GRACE_MS)
+                                    if (com.datathrottle.debug.DebugFlags.forceCellular.value) {
+                                        com.datathrottle.debug.DebugFlags.setForceCellular(false)
+                                        android.util.Log.d(
+                                            "MainActivity",
+                                            "Focus lost for ${SPOOF_GRACE_MS / 60000} min: cellular spoof disabled"
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                            if (spoofDisableJob?.isActive == true) {
+                                spoofDisableJob?.cancel()
+                                android.util.Log.d("MainActivity", "Focus regained: pending spoof disable cancelled")
+                            }
+                            spoofDisableJob = null
+                        }
+                        androidx.lifecycle.Lifecycle.Event.ON_DESTROY -> {
+                            spoofDisableJob?.cancel()
+                            spoofDisableJob = null
+                        }
+                        else -> {}
                     }
                 }
             )
