@@ -19,6 +19,8 @@ import com.datathrottle.core.NetworkMonitor
 import com.datathrottle.core.NetworkType
 import com.datathrottle.core.ShizukuManager
 import com.datathrottle.core.ShizukuStatus
+import com.datathrottle.core.HomeToggleAction
+import com.datathrottle.core.PauseControl
 import com.datathrottle.core.StreamTestEngine
 import com.datathrottle.core.TestLaunchPolicy
 import com.datathrottle.data.AppTheme
@@ -99,17 +101,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Triple(secure, notif, battery)
     }
 
-    // The toggle must read OFF while the 60 s unlimit window is open (S2-15):
-    // the service keeps running, but no cap is applied, so the home switch and
-    // status text must not claim a limit is in force.
-    private val serviceEnforcing = combine(
-        BandwidthControlService.isRunning,
-        BandwidthControlService.isPaused
-    ) { running, paused -> running && !paused }
-
+    // S2-19: the switch shows the *service* state, not the momentary pause. It
+    // therefore stays ON while the unlimit window is open (the notification owns
+    // the pause countdown); tapping it then means "resume now" — see
+    // PauseControl / toggleService.
     val uiState: StateFlow<MainUiState> = combine(
         networkMonitor.networkType,
-        serviceEnforcing,
+        BandwidthControlService.isRunning,
         settingsRepository.bandwidthLimitMbps,
         _isDiagnosticRunning,
         combine(shizukuManager.status, permissionsFlow, _settingsLoaded) { shizuku, perms, loaded ->
@@ -240,13 +238,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleService(enable: Boolean) {
         val context = getApplication<Application>()
         val intent = Intent(context, BandwidthControlService::class.java)
-        if (enable) {
-            context.startForegroundService(intent)
-        } else {
-            context.stopService(intent)
-        }
-        viewModelScope.launch {
-            settingsRepository.setServiceEnabled(enable)
+        when (PauseControl.actionFor(BandwidthControlService.isPaused.value, enable)) {
+            // S2-19: tap during the unlimit window -> resume throttling now and
+            // drop the countdown. The service keeps running: the user asked to
+            // lift the cap, not to switch throttling off.
+            HomeToggleAction.RESUME_THROTTLE -> {
+                Log.d(TAG, "toggleService during pause window: resuming throttle now")
+                intent.action = BandwidthControlService.ACTION_PAUSE_60S
+                ContextCompat.startForegroundService(context, intent)
+            }
+            HomeToggleAction.START_SERVICE -> {
+                context.startForegroundService(intent)
+                viewModelScope.launch {
+                    settingsRepository.setServiceEnabled(true)
+                }
+            }
+            HomeToggleAction.STOP_SERVICE -> {
+                context.stopService(intent)
+                viewModelScope.launch {
+                    settingsRepository.setServiceEnabled(false)
+                }
+            }
         }
     }
 
