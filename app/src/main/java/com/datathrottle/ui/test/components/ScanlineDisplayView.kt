@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -59,49 +58,50 @@ fun ScanlineDisplayView(
 
             // Draw image clipped to progress
             if (bitmap != null && progress > 0f) {
-                // A partial (top-band) decode already represents "arrived
-                // bytes only"; the scanline view must not clip it again.
-                val clipBottom = if (state.partialImage) canvasHeight else canvasHeight * progress
+                // A partial decode is a top band (full width × progress rows).
+                // Recover the full-image aspect from it and anchor the band to
+                // the top edge, so the reveal grows top-to-bottom like a real
+                // scanline — fit-centering the band itself made it look like
+                // the middle of the image was rendering outwards.
+                val partial = state.partialImage
+                val fullWidth = bitmap.width
+                val fullHeight = if (partial && progress > 0f) {
+                    (bitmap.height / progress).toInt().coerceAtLeast(bitmap.height)
+                } else bitmap.height
 
-                clipRect(
-                    left = 0f,
-                    top = 0f,
-                    right = canvasWidth,
-                    bottom = clipBottom
-                ) {
-                    // Preserve the source aspect ratio and center it (S3-05)
-                    val scale = minOf(
-                        canvasWidth / bitmap.width.toFloat(),
-                        canvasHeight / bitmap.height.toFloat()
-                    )
-                    val dstWidth = bitmap.width * scale
-                    val dstHeight = bitmap.height * scale
-                    drawImage(
-                        image = bitmap,
-                        srcOffset = IntOffset.Zero,
-                        srcSize = IntSize(bitmap.width, bitmap.height),
-                        dstOffset = IntOffset(
-                            ((canvasWidth - dstWidth) / 2f).toInt(),
-                            ((canvasHeight - dstHeight) / 2f).toInt()
-                        ),
-                        dstSize = IntSize(dstWidth.toInt(), dstHeight.toInt())
-                    )
-                }
+                val scale = minOf(
+                    canvasWidth / fullWidth.toFloat(),
+                    canvasHeight / fullHeight.toFloat()
+                )
+                val dstWidth = fullWidth * scale
+                val fullDstHeight = fullHeight * scale
+                val bandDstHeight = if (partial) fullDstHeight * progress else fullDstHeight
+                val dstX = (canvasWidth - dstWidth) / 2f
+                val dstY = if (partial) 0f else (canvasHeight - fullDstHeight) / 2f
 
-                // Draw Scanline Laser Beam
+                drawImage(
+                    image = bitmap,
+                    srcOffset = IntOffset.Zero,
+                    srcSize = IntSize(bitmap.width, bitmap.height),
+                    dstOffset = IntOffset(dstX.toInt(), dstY.toInt()),
+                    dstSize = IntSize(dstWidth.toInt(), bandDstHeight.toInt())
+                )
+
+                // Draw Scanline Laser Beam riding the band's bottom edge
                 if (progress < 1.0f) {
+                    val laserY = dstY + bandDstHeight
                     // Glow beam
                     drawLine(
                         color = Color(0x6600E5FF),
-                        start = Offset(0f, clipBottom),
-                        end = Offset(canvasWidth, clipBottom),
+                        start = Offset(0f, laserY),
+                        end = Offset(canvasWidth, laserY),
                         strokeWidth = 8f
                     )
                     // Sharp laser line
                     drawLine(
                         color = Color(0xFF00E5FF),
-                        start = Offset(0f, clipBottom),
-                        end = Offset(canvasWidth, clipBottom),
+                        start = Offset(0f, laserY),
+                        end = Offset(canvasWidth, laserY),
                         strokeWidth = 3f
                     )
                 }
