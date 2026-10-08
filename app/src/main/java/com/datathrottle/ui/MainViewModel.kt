@@ -27,6 +27,7 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -132,7 +133,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             settingsRepository.bandwidthLimitMbps.first()
             _settingsLoaded.value = true
         }
+        // Single serialized writer for limit changes (S2-13): a fling on the
+        // drumroll used to launch dozens of concurrent dataStore.edit calls whose
+        // commit order is not emission order, so the *persisted* value could end
+        // up an arbitrary mid-fling intermediate (home vs picker vs notification
+        // all showing different numbers). CONFLATED keeps only the latest pending
+        // value; one writer coroutine restores last-write-wins semantics.
+        viewModelScope.launch {
+            for (value in limitWrites) {
+                settingsRepository.setBandwidthLimitMbps(value)
+            }
+        }
     }
+
+    private val limitWrites = Channel<Float>(Channel.CONFLATED)
 
     /**
      * Clear a throttling cap that outlived the service (S1-06): if the persisted
@@ -211,9 +225,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // the picker emits its initial index during the first composition and that
         // must not overwrite the stored limit (S1-02).
         if (!_settingsLoaded.value) return
-        viewModelScope.launch {
-            settingsRepository.setBandwidthLimitMbps(limit)
-        }
+        // Conflated single-writer (S2-13): see the limitWrites consumer in init.
+        limitWrites.trySend(limit)
     }
 
     fun start100KbpsTest() {

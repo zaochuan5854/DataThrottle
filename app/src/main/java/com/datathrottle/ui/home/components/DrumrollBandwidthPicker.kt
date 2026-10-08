@@ -32,6 +32,7 @@ import com.datathrottle.R
 import com.datathrottle.core.formatMbpsValue
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -83,7 +84,14 @@ fun DrumrollBandwidthPicker(
     }
 
     LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex }
+        // S2-13: commit only when the roll has settled (snap finished, no scroll in
+        // progress). Per-notch commits turned a fast fling into a barrage of
+        // concurrent DataStore writes whose arrival order is not emission order —
+        // the persisted value could end up an intermediate notch (value drift).
+        snapshotFlow { listState.firstVisibleItemIndex to listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .filter { (_, scrolling) -> !scrolling }
+            .map { (index, _) -> index }
             .distinctUntilChanged()
             .filter { isReady && aligned }
             .collect { index ->

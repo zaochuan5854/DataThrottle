@@ -248,7 +248,11 @@ class BandwidthControlService : Service() {
                 settingsRepository.setLastAppliedLimitBytes(limit)
             }
         }
-        updateNotification(networkType, diagnosticLimit != null, limitMbps, shouldAlert = hasStateChanged, notEnforced = !enforced)
+        // The notification's speed text reflects the bytes actually applied to the
+        // kernel (S2-13): during rapid limit changes the config parameter and the
+        // last successful write could otherwise disagree in the displayed notice.
+        val appliedMbps = if (enforced && limit > 0) limit.toFloat() / MBPS_TO_BYTES_PER_SECOND else limitMbps
+        updateNotification(networkType, diagnosticLimit != null, appliedMbps, shouldAlert = hasStateChanged, notEnforced = !enforced)
     }
 
     /**
