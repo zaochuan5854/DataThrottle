@@ -228,8 +228,10 @@ class BandwidthControlService : Service() {
 
     private fun applyAppropriateLimit(limitMbps: Float, networkType: NetworkType) {
         val limit = when {
-            paused -> UNLIMITED
+            // A running diagnostic owns the cap: a test must never measure an
+            // unthrottled download, so the pause window yields to it (S2-16).
             diagnosticLimit != null -> diagnosticLimit!!
+            paused -> UNLIMITED
             networkType == NetworkType.CELLULAR -> (limitMbps * MBPS_TO_BYTES_PER_SECOND).toLong()
             else -> UNLIMITED
         }
@@ -289,7 +291,7 @@ class BandwidthControlService : Service() {
                     if (remaining <= 0) break
                     pauseRemainingSec = remaining
                     updateNotification(networkMonitor.networkType.value,
-                        isDiagnostic = false,
+                        isDiagnostic = diagnosticLimit != null,
                         limitMbps = currentLimitMbps)
                 }
                 pauseRemainingSec = 0
@@ -310,6 +312,19 @@ class BandwidthControlService : Service() {
                 applyAppropriateLimit(m, networkMonitor.networkType.value)
             }
         }
+    }
+
+    /**
+     * Drop the pause countdown without touching the cap (S1-16). Called from the
+     * teardown paths so the countdown tail cannot re-apply a limit after the
+     * service has already reset to unlimited.
+     */
+    private fun cancelPauseWindow() {
+        pauseJob?.cancel()
+        pauseJob = null
+        paused = false
+        _isPaused.value = false
+        pauseRemainingSec = 0
     }
 
     private fun showPermissionErrorNotification() {
@@ -499,6 +514,10 @@ class BandwidthControlService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         Log.d(TAG, "onTaskRemoved: clearing bandwidth limit (fail-safe)")
         serviceJob?.cancel()
+        // S1-16: cancel the pause countdown too. Otherwise its tail re-applies the
+        // cellular cap ~60 s *after* teardown — a zombie cap with no service left
+        // to clear it (the same failure class S1-06 guards against).
+        cancelPauseWindow()
         // Fail-safe teardown: must land before process death (S1-06), but bounded
         // so a contended system_server cannot stall the main thread into an ANR.
         teardownSynchronously()
@@ -518,6 +537,7 @@ class BandwidthControlService : Service() {
         _isRunning.value = false
         _isPaused.value = false
         serviceJob?.cancel()
+        cancelPauseWindow()
         networkMonitor.stopMonitoring()
         // Synchronous teardown: the reset must land before process death (S1-06).
         teardownSynchronously()

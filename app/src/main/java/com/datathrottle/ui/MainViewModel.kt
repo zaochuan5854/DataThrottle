@@ -25,6 +25,7 @@ import com.datathrottle.data.SettingsRepository
 import com.datathrottle.service.BandwidthControlService
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.channels.Channel
@@ -85,9 +86,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
 
     fun setAppTheme(theme: AppTheme) {
-        viewModelScope.launch {
-            settingsRepository.setAppTheme(theme)
-        }
+        // Conflated single-writer (S3-16): see the themeWrites consumer in init.
+        themeWrites.trySend(theme)
     }
 
     private val permissionsFlow = combine(
@@ -134,6 +134,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     private val limitWrites = Channel<Float>(Channel.CONFLATED)
+    private val themeWrites = Channel<AppTheme>(Channel.CONFLATED)
+
+    // S2-17: the 100 kbps test launches through a poll-then-start coroutine.
+    // Cancelling the test used to leave that coroutine alive: a cancel inside the
+    // ≤3 s cap-confirm window still started the transfer afterwards (zombie run,
+    // cap held, no UI state). One job handle, cancelled on every stop path.
+    private var testLaunchJob: Job? = null
 
     init {
         networkMonitor.startMonitoring()
@@ -154,6 +161,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             for (value in limitWrites) {
                 settingsRepository.setBandwidthLimitMbps(value)
+            }
+        }
+        // Theme picker writes go through the same single-writer funnel (S3-16):
+        // concurrent dataStore.edit calls can commit out of emission order.
+        viewModelScope.launch {
+            for (theme in themeWrites) {
+                settingsRepository.setAppTheme(theme)
             }
         }
     }
@@ -240,6 +254,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun start100KbpsTest() {
+        // S2-17: a second tap while a run (or its cap-confirm poll) is in flight
+        // would start a competing poll -> competing engine run -> competing
+        // completion callbacks. One at a time.
+        if (_isDiagnosticRunning.value) {
+            Log.w(TAG, "start100KbpsTest ignored: a run is already in flight")
+            return
+        }
         val context = getApplication<Application>()
         val intent = Intent(context, BandwidthControlService::class.java).apply {
             action = BandwidthControlService.ACTION_SET_DIAGNOSTIC
@@ -258,7 +279,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // installed, so the test stream must not connect before the diagnostic
         // cap is visible in Settings.Global. Poll for confirmation (max 3 s)
         // and only start measuring once the 100 kbps cap is verified live.
-        viewModelScope.launch {
+        // S2-17: the job is tracked so cancel/safetyReset can abort the poll --
+        // otherwise a cancel inside the confirm window still started the run.
+        testLaunchJob = viewModelScope.launch {
             val applied = withTimeoutOrNull(LIMIT_CONFIRM_TIMEOUT_MS) {
                 while (bandwidthController.currentIngressRateLimit()
                     != StreamTestEngine.TARGET_RATE_BYTES_PER_SEC
@@ -302,6 +325,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun cancel100KbpsTest() {
+        // S2-17: abort the cap-confirm poll first, otherwise the run starts
+        // after the cancel (zombie transfer with a released diagnostic cap).
+        testLaunchJob?.cancel()
+        testLaunchJob = null
         streamTestEngine.cancelTest()
         val context = getApplication<Application>()
         val resetIntent = Intent(context, BandwidthControlService::class.java).apply {
@@ -324,6 +351,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun safetyReset() {
+        testLaunchJob?.cancel() // S2-17
+        testLaunchJob = null
         streamTestEngine.cancelTest()
         _isDiagnosticRunning.value = false
         // Stop via the dedicated action: startService() on the diagnostic-reset
