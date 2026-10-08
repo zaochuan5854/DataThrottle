@@ -6,8 +6,8 @@ plugins {
 }
 
 // ─── Version: read from gradle.properties (overridable from CI) ───────────────
-val appVersionName: String = project.findProperty("APP_VERSION_NAME") as String? ?: "0.2.0"
-val appVersionCode: Int    = (project.findProperty("APP_VERSION_CODE") as String?)?.toInt() ?: 200
+val appVersionName: String = project.findProperty("APP_VERSION_NAME") as String? ?: "0.2.1"
+val appVersionCode: Int    = (project.findProperty("APP_VERSION_CODE") as String?)?.toInt() ?: 201
 
 android {
     namespace = "com.datathrottle"
@@ -63,7 +63,12 @@ android {
                 signingConfigs.getByName("debug")
             }
             optimization {
-                enable = false
+                enable = true
+            }
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            ndk {
+                // Test devices are arm64; shipping 4 ABIs triples the native payload.
+                abiFilters += "arm64-v8a"
             }
         }
     }
