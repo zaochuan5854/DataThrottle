@@ -103,17 +103,6 @@ class StreamTestEngine(
         private const val MAX_TEST_DURATION_MS = 90_000L
         private const val MIN_BYTES_FOR_REGION = 2048L
 
-        /**
-         * Shaper initial credit measured ≈135–166 KB @12.5 KB/s cap. The
-         * drain stops on observed steady state: one WARM_WINDOW_MS of
-         * watermark throughput within +40% of the cap proves the bucket
-         * empty, then WARM_DWELL_MS at cap rate warms the path.
-         */
-        private const val WARM_MIN_RATE_SECONDS = 4L
-        private const val WARM_WINDOW_MS = 2_000L
-        private const val WARM_DWELL_MS = 1_500L
-        private const val BURST_DRAIN_TIMEOUT_MS = 30_000L
-
         /** Prefix size enough to carry the JPEG SOF header for aspect probing. */
         private const val ASPECT_PROBE_BYTES = 32 * 1024L
 
@@ -253,7 +242,6 @@ class StreamTestEngine(
             Log.w(TAG, "DownloadManager unavailable")
             return false
         }
-        shaperBurstDrain(dm, rateBytesPerSec)
         val dest = java.io.File(context.getExternalFilesDir(null), "diagnostic_test.jpg")
         runCatching { dest.delete() }
         val request = DownloadManager.Request(Uri.parse(DEFAULT_TEST_IMAGE_URL)).apply {
@@ -274,118 +262,6 @@ class StreamTestEngine(
         } finally {
             runCatching { dm.remove(enqueueId) }
             runCatching { dest.delete() }
-        }
-    }
-
-    /**
-     * The shaper grants each affected uid an initial token-bucket credit of
-     * ≈135–166 KB at the 12.5 KB/s cap (measured), so a fresh download rides
-     * unshaped radio speed for its first ~135 KB — the jarring head-start of
-     * the scanline and the reason the verdict excludes a burst window. The
-     * credit is SHARED across flows of the uid and refills only at the cap
-     * rate: a back-to-back second transfer is capped from byte 0 (measured,
-     * docs/VERIFICATION.md).
-     *
-     * Warm-up at the target rate: sink the same object free-flowing FIRST
-     * (traffic at exactly the cap rate never drains the bucket — refill ==
-     * consumption — the credit only empties under above-cap flow), then stop
-     * once the sink is demonstrably RUNNING AT THE TARGET RATE: a window of
-     * watermark-measured throughput within +40% of the cap proves the bucket
-     * is empty, and a short dwell at cap rate warms the path. No fixed byte
-     * budget: the stop is driven by observed steady state, and the
-     * write-watermark probe gives ~8 KiB-granular rate visibility without
-     * the DB column's 72 KiB/2 s staircase lag. Any failure is non-fatal:
-     * the burst-window verdict path still covers the credit.
-     */
-    private suspend fun shaperBurstDrain(dm: DownloadManager, rateBytesPerSec: Long) {
-        val sinkFile = java.io.File(context.getExternalFilesDir(null), "diagnostic_sink.jpg")
-        runCatching { sinkFile.delete() }
-        val sinkId = runCatching {
-            dm.enqueue(
-                DownloadManager.Request(Uri.parse(DEFAULT_TEST_IMAGE_URL)).apply {
-                    setDestinationUri(Uri.fromFile(sinkFile))
-                    setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    setAllowedOverMetered(true)
-                    setAllowedOverRoaming(true)
-                }
-            )
-        }.getOrElse {
-            Log.w(TAG, "burst-drain enqueue failed: ${it.message}")
-            return
-        }
-        val startMs = System.currentTimeMillis()
-        val probe = WriteWatermarkProbe(sinkFile)
-        var sinkBytes = 0L
-        // Rate-window state machine: anchor a measurement window once enough
-        // bytes are in flight; when one window shows ≈cap throughput the
-        // bucket is empty → dwell a final window at cap rate, then start.
-        val minWarmBytes = rateBytesPerSec * WARM_MIN_RATE_SECONDS
-        var anchorMs = 0L
-        var anchorBytes = 0L
-        var warmDwellUntilMs = -1L
-        try {
-            while (System.currentTimeMillis() - startMs < BURST_DRAIN_TIMEOUT_MS) {
-                delay(UI_UPDATE_INTERVAL_MS)
-                var bytes = 0L
-                var status = DownloadManager.STATUS_FAILED
-                val query = dm.query(DownloadManager.Query().setFilterById(sinkId))
-                try {
-                    if (query != null && query.moveToFirst()) {
-                        status = query.getInt(query.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                        bytes = query.getLong(
-                            query.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                        )
-                    }
-                } finally {
-                    runCatching { query?.close() }
-                }
-                sinkBytes = maxOf(sinkBytes, bytes, probe.advance())
-                val nowMs = System.currentTimeMillis()
-                val elapsedMs = nowMs - startMs
-                if (status == DownloadManager.STATUS_FAILED) {
-                    Log.w(TAG, "burst-drain sink failed; proceeding to the measured transfer")
-                    break
-                }
-                if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                    // The whole object fit in the credit window; it is spent.
-                    Log.d(TAG, "burst-drain: credit exceeded object size (sinkBytes=$sinkBytes)")
-                    break
-                }
-                // bytes moving at ≈cap from the very first sample ⇒ credit
-                // already spent (immediate re-run); stop without a dwell.
-                if (elapsedMs >= 3_000 && warmDwellUntilMs < 0 && anchorMs == 0L &&
-                    sinkBytes >= rateBytesPerSec * 2 && sinkBytes < rateBytesPerSec * 4
-                ) {
-                    Log.d(TAG, "burst-drain: no credit left (bytes=$sinkBytes at ${elapsedMs}ms)")
-                    break
-                }
-                if (warmDwellUntilMs > 0) {
-                    if (nowMs >= warmDwellUntilMs) break
-                    continue
-                }
-                if (sinkBytes >= minWarmBytes) {
-                    if (anchorMs == 0L) {
-                        anchorMs = nowMs
-                        anchorBytes = sinkBytes
-                    } else if (nowMs - anchorMs >= WARM_WINDOW_MS) {
-                        val observedRate = (sinkBytes - anchorBytes) * 1000 / (nowMs - anchorMs)
-                        if (observedRate <= rateBytesPerSec * 14 / 10) {
-                            Log.d(TAG, "burst-drain warm at ${observedRate}B/s (target $rateBytesPerSec)")
-                            warmDwellUntilMs = nowMs + WARM_DWELL_MS
-                        } else {
-                            anchorMs = nowMs
-                            anchorBytes = sinkBytes
-                        }
-                    }
-                }
-            }
-        } finally {
-            runCatching { dm.remove(sinkId) }
-            runCatching { sinkFile.delete() }
-            Log.d(
-                TAG,
-                "burst-drain done sinkBytes=$sinkBytes tookMs=${System.currentTimeMillis() - startMs}"
-            )
         }
     }
 
