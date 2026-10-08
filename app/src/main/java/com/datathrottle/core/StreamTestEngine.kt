@@ -103,6 +103,14 @@ class StreamTestEngine(
         private const val MAX_TEST_DURATION_MS = 90_000L
         private const val MIN_BYTES_FOR_REGION = 2048L
 
+        /**
+         * Shaper initial credit measured ≈135–166 KB @12.5 KB/s cap; the sink
+         * drains at least this much (margin) — or 16 s worth of the cap rate.
+         */
+        private const val BURST_DRAIN_MIN_BYTES = 196_608L
+        private const val BURST_DRAIN_RATE_SECONDS = 16L
+        private const val BURST_DRAIN_TIMEOUT_MS = 30_000L
+
         /** Prefix size enough to carry the JPEG SOF header for aspect probing. */
         private const val ASPECT_PROBE_BYTES = 32 * 1024L
 
@@ -242,6 +250,7 @@ class StreamTestEngine(
             Log.w(TAG, "DownloadManager unavailable")
             return false
         }
+        shaperBurstDrain(dm, rateBytesPerSec)
         val dest = java.io.File(context.getExternalFilesDir(null), "diagnostic_test.jpg")
         runCatching { dest.delete() }
         val request = DownloadManager.Request(Uri.parse(DEFAULT_TEST_IMAGE_URL)).apply {
@@ -262,6 +271,79 @@ class StreamTestEngine(
         } finally {
             runCatching { dm.remove(enqueueId) }
             runCatching { dest.delete() }
+        }
+    }
+
+    /**
+     * The shaper grants each affected uid an initial token-bucket credit of
+     * ≈135–166 KB at the 12.5 KB/s cap (measured), so a fresh download rides
+     * unshaped radio speed for its first ~135 KB — the jarring head-start of
+     * the scanline and the reason the verdict excludes a burst window. The
+     * credit is SHARED across flows of the uid and refills only at the cap
+     * rate: a back-to-back second transfer is capped from byte 0 (measured,
+     * docs/VERIFICATION.md). Sink a throwaway copy of the test object and
+     * abort it once the credit is spent, so the measured transfer is shaped
+     * from byte 0 and the reveal advances at a uniform rate. Any failure is
+     * non-fatal: the burst-window verdict path still covers the credit.
+     */
+    private suspend fun shaperBurstDrain(dm: DownloadManager, rateBytesPerSec: Long) {
+        val sinkFile = java.io.File(context.getExternalFilesDir(null), "diagnostic_sink.jpg")
+        runCatching { sinkFile.delete() }
+        val sinkId = runCatching {
+            dm.enqueue(
+                DownloadManager.Request(Uri.parse(DEFAULT_TEST_IMAGE_URL)).apply {
+                    setDestinationUri(Uri.fromFile(sinkFile))
+                    setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    setAllowedOverMetered(true)
+                    setAllowedOverRoaming(true)
+                }
+            )
+        }.getOrElse {
+            Log.w(TAG, "burst-drain enqueue failed: ${it.message}")
+            return
+        }
+        val drainBytes = maxOf(rateBytesPerSec * BURST_DRAIN_RATE_SECONDS, BURST_DRAIN_MIN_BYTES)
+        val startMs = System.currentTimeMillis()
+        var sinkBytes = 0L
+        try {
+            while (System.currentTimeMillis() - startMs < BURST_DRAIN_TIMEOUT_MS) {
+                delay(UI_UPDATE_INTERVAL_MS)
+                var bytes = 0L
+                var status = DownloadManager.STATUS_FAILED
+                val query = dm.query(DownloadManager.Query().setFilterById(sinkId))
+                try {
+                    if (query != null && query.moveToFirst()) {
+                        status = query.getInt(query.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                        bytes = query.getLong(
+                            query.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                        )
+                        sinkBytes = maxOf(sinkBytes, bytes)
+                    }
+                } finally {
+                    runCatching { query?.close() }
+                }
+                if (bytes >= drainBytes || status == DownloadManager.STATUS_SUCCESSFUL) break
+                if (status == DownloadManager.STATUS_FAILED) {
+                    Log.w(TAG, "burst-drain sink failed; proceeding to the measured transfer")
+                    break
+                }
+                // bytes moving at ≈cap from the start ⇒ credit already spent
+                // (immediate re-run); no need to burn another ~16 s of sink.
+                val elapsedMs = System.currentTimeMillis() - startMs
+                if (elapsedMs >= 3_000 &&
+                    bytes >= rateBytesPerSec * 2 && bytes < rateBytesPerSec * 4
+                ) {
+                    Log.d(TAG, "burst-drain: no credit left (bytes=$bytes at ${elapsedMs}ms)")
+                    break
+                }
+            }
+        } finally {
+            runCatching { dm.remove(sinkId) }
+            runCatching { sinkFile.delete() }
+            Log.d(
+                TAG,
+                "burst-drain done sinkBytes=$sinkBytes tookMs=${System.currentTimeMillis() - startMs}"
+            )
         }
     }
 
