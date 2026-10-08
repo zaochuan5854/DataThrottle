@@ -22,7 +22,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Set up FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg

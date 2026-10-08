@@ -34,7 +34,7 @@ jobs:
       # Android SDK は ubuntu-latest に事前インストール済み。
       # act（ローカルテスト）など SDK が無い環境でも動くよう明示的にセットアップする。
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Cache Gradle
         uses: actions/cache@v4
