@@ -278,6 +278,7 @@ class StreamTestEngine(
         var targetTotal = 0L
         var magicChecked = false
         val burstWindow = BurstWindow()
+        val watermark = WriteWatermarkProbe(dest)
 
         while (true) {
             delay(UI_UPDATE_INTERVAL_MS)
@@ -311,15 +312,18 @@ class StreamTestEngine(
             }
 
             totalRead = bytes
-            // NB: dest.length() is NOT a progress signal — DownloadManager
-            // preallocates the destination file to the full content-length at
-            // start (measured: file shows 396,874 B ~3 s after enqueue while
-            // the transfer is still at the cap). The only progress source is
-            // the DB column, which AOSP DownloadThread throttles:
-            // MIN_PROGRESS_STEP=64 KiB AND MIN_PROGRESS_TIME=2 s
-            // (Constants.java) ⇒ at the 12.5 KB/s cap, a 73,728 B staircase
-            // (65,536 strict gate + one 8 KiB BUFFER_SIZE overshoot) every
-            // ~6 s — the source of the visualization's coarse steps.
+            // The DB column is the verdict-grade progress source, but the
+            // provider throttles it: MIN_PROGRESS_STEP=64 KiB AND
+            // MIN_PROGRESS_TIME=2 s (Constants.java) ⇒ at the 12.5 KB/s cap a
+            // 73,728 B staircase (65,536 strict gate + one 8 KiB BUFFER_SIZE
+            // overshoot) every ~6 s. dest.length() is not a signal at all —
+            // the destination is preallocated to the full content-length at
+            // start. For the visualization only, the write-watermark probe
+            // reads the true write cursor off the file at ~8 KiB granularity
+            // (device probe: fr advanced 291,328→337,408→384,000 smoothly
+            // while the column stepped by 73,728). The verdict below keeps
+            // using the DB column, which is the shaping-governed truth.
+            val visibleBytes = maxOf(bytes, watermark.advance())
 
             if (status == DownloadManager.STATUS_FAILED) {
                 Log.w(TAG, "DownloadManager transfer failed (reason=$reason) at ${bytes}B")
@@ -331,23 +335,26 @@ class StreamTestEngine(
                 burstWindow.sample(elapsedMs, totalRead, now)
                 val avgKbps = if (elapsedMs > 0) (totalRead * 8f) / (elapsedMs / 1000f) / 1000f else 0f
                 val progress = if (targetTotal > 0) {
-                    (totalRead.toFloat() / targetTotal.toFloat()).coerceIn(0f, 1f)
+                    (visibleBytes.coerceAtMost(targetTotal).toFloat() / targetTotal.toFloat())
+                        .coerceIn(0f, 1f)
                 } else 0f
 
-                if (totalRead - lastRegionAt >= (targetTotal / 20).coerceAtLeast(MIN_BYTES_FOR_REGION)) {
-                    lastRegionAt = totalRead
-                    bandBitmap = decodeBandFrom(readDelimitedBytes(dest, totalRead), progress) ?: bandBitmap
+                if (visibleBytes - lastRegionAt >= (targetTotal / 20).coerceAtLeast(MIN_BYTES_FOR_REGION)) {
+                    lastRegionAt = visibleBytes
+                    bandBitmap =
+                        decodeBandFrom(readDelimitedBytes(dest, visibleBytes), progress) ?: bandBitmap
                 }
 
                 _testState.value = _testState.value.copy(
                     status = TestStatus.RUNNING,
-                    bytesRead = totalRead,
+                    // Displayed bytes follow the real write cursor (smooth);
+                    // the verdict still uses the throttled DB column.
+                    bytesRead = visibleBytes,
                     totalBytes = targetTotal,
                     progress = progress,
                     elapsedTimeMs = elapsedMs,
-                    // The DB progress column advances in 72 KiB steps (AOSP
-                    // MIN_PROGRESS_STEP throttle); the speed display uses the
-                    // running average, which matches the verdict the report
+                    // The speed display uses the running average computed from
+                    // the DB column, which matches the verdict the report
                     // gives (S3-11).
                     currentSpeedKbps = avgKbps,
                     averageSpeedKbps = avgKbps,
