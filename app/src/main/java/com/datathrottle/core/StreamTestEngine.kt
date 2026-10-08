@@ -311,6 +311,15 @@ class StreamTestEngine(
             }
 
             totalRead = bytes
+            // NB: dest.length() is NOT a progress signal — DownloadManager
+            // preallocates the destination file to the full content-length at
+            // start (measured: file shows 396,874 B ~3 s after enqueue while
+            // the transfer is still at the cap). The only progress source is
+            // the DB column, which AOSP DownloadThread throttles:
+            // MIN_PROGRESS_STEP=64 KiB AND MIN_PROGRESS_TIME=2 s
+            // (Constants.java) ⇒ at the 12.5 KB/s cap, a 73,728 B staircase
+            // (65,536 strict gate + one 8 KiB BUFFER_SIZE overshoot) every
+            // ~6 s — the source of the visualization's coarse steps.
 
             if (status == DownloadManager.STATUS_FAILED) {
                 Log.w(TAG, "DownloadManager transfer failed (reason=$reason) at ${bytes}B")
@@ -336,9 +345,10 @@ class StreamTestEngine(
                     totalBytes = targetTotal,
                     progress = progress,
                     elapsedTimeMs = elapsedMs,
-                    // The provider delivers in ~72 KiB bursts every ~6 s (E7), so a
-                    // short window would read 0 between bursts (S3-11). Show the
-                    // running average, which matches the verdict the report gives.
+                    // The DB progress column advances in 72 KiB steps (AOSP
+                    // MIN_PROGRESS_STEP throttle); the speed display uses the
+                    // running average, which matches the verdict the report
+                    // gives (S3-11).
                     currentSpeedKbps = avgKbps,
                     averageSpeedKbps = avgKbps,
                     imageBitmap = bandBitmap,
