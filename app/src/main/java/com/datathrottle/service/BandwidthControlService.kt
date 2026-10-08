@@ -59,6 +59,12 @@ class BandwidthControlService : Service() {
     private var lastAppliedLimit: Long? = null
     private var lastAppliedType: NetworkType? = null
 
+    // Notification-driven 60 s unlimit (toggle). Volatile: written on the
+    // service scope, read when (re)building the notification on the main thread.
+    @Volatile private var paused = false
+    @Volatile private var pauseRemainingSec = 0
+    private var pauseJob: Job? = null
+
     companion object {
         private const val TAG = "BandwidthControlService"
         private const val UNLIMITED = -1L
@@ -68,6 +74,10 @@ class BandwidthControlService : Service() {
         const val ACTION_STOP_SERVICE = "com.datathrottle.STOP_SERVICE"
         const val ACTION_SET_DIAGNOSTIC = "com.datathrottle.SET_DIAGNOSTIC"
         const val ACTION_DEBUG_DM_PROBE = "com.datathrottle.DEBUG_DM_PROBE"
+        const val ACTION_PAUSE_60S = "com.datathrottle.PAUSE_60S"
+
+        /** The notification "unlimit" button releases the throttle for this long. */
+        private const val PAUSE_MS = 60_000L
 
         // E7: probe object must be ≫ shaper burst (token-bucket), so use a 2 MB
         // object instead of the 82 KB test image. Range requests supported (206).
@@ -124,6 +134,7 @@ class BandwidthControlService : Service() {
                 }
             }
             ACTION_DEBUG_DM_PROBE -> runDebugDmProbe()
+            ACTION_PAUSE_60S -> togglePause()
         }
 
         val initialType = networkMonitor.networkType.value
@@ -212,6 +223,7 @@ class BandwidthControlService : Service() {
 
     private fun applyAppropriateLimit(limitMbps: Float, networkType: NetworkType) {
         val limit = when {
+            paused -> UNLIMITED
             diagnosticLimit != null -> diagnosticLimit!!
             networkType == NetworkType.CELLULAR -> (limitMbps * MBPS_TO_BYTES_PER_SECOND).toLong()
             else -> UNLIMITED
@@ -237,6 +249,55 @@ class BandwidthControlService : Service() {
             }
         }
         updateNotification(networkType, diagnosticLimit != null, limitMbps, shouldAlert = hasStateChanged, notEnforced = !enforced)
+    }
+
+    /**
+     * The notification "unlimit" button: a 60 s toggle. Ignored while a
+     * diagnostic scanline test owns the cap (pause would distort the verdict).
+     * Re-tapping while paused resumes the throttle immediately.
+     */
+    private fun togglePause() {
+        if (diagnosticLimit != null) {
+            Log.w(TAG, "Pause request ignored: diagnostic test is running")
+            return
+        }
+        pauseJob?.cancel()
+        pauseJob = null
+        if (!paused) {
+            paused = true
+            pauseRemainingSec = (PAUSE_MS / 1000L).toInt()
+            Log.d(TAG, "Throttle paused for ${PAUSE_MS / 1000} s")
+            pauseJob = serviceScope.launch {
+                val m = settingsRepository.bandwidthLimitMbps.first()
+                applyAppropriateLimit(m, networkMonitor.networkType.value)
+                // Refresh the notification once per second with the live
+                // remaining-seconds countdown until the window elapses.
+                val t0 = System.currentTimeMillis()
+                while (true) {
+                    delay(1000)
+                    val remaining = ((PAUSE_MS - (System.currentTimeMillis() - t0)) / 1000L).toInt()
+                    if (remaining <= 0) break
+                    pauseRemainingSec = remaining
+                    updateNotification(networkMonitor.networkType.value,
+                        isDiagnostic = false,
+                        limitMbps = currentLimitMbps)
+                }
+                pauseRemainingSec = 0
+                paused = false
+                pauseJob = null
+                Log.d(TAG, "Pause window elapsed: resuming throttle")
+                val m2 = settingsRepository.bandwidthLimitMbps.first()
+                applyAppropriateLimit(m2, networkMonitor.networkType.value)
+            }
+        } else {
+            paused = false
+            pauseRemainingSec = 0
+            Log.d(TAG, "Pause cancelled early: resuming throttle now")
+            serviceScope.launch {
+                val m = settingsRepository.bandwidthLimitMbps.first()
+                applyAppropriateLimit(m, networkMonitor.networkType.value)
+            }
+        }
     }
 
     private fun showPermissionErrorNotification() {
@@ -325,10 +386,19 @@ class BandwidthControlService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Single toggle intent: label/color flip with [paused].
+        val pausePendingIntent = PendingIntent.getService(
+            this,
+            102,
+            Intent(this, BandwidthControlService::class.java).apply { action = ACTION_PAUSE_60S },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val formattedLimit = formatMbps(limitMbps)
 
         val title = when {
             notEnforced -> getString(R.string.status_not_enforced)
+            paused -> getString(R.string.status_paused)
             isDiagnostic -> getString(R.string.test_running)
             type == NetworkType.CELLULAR -> getString(R.string.status_limited_to, formattedLimit)
             type == NetworkType.WIFI -> getString(R.string.status_unlimited_wifi)
@@ -337,6 +407,7 @@ class BandwidthControlService : Service() {
 
         val desc = when {
             notEnforced -> getString(R.string.status_not_enforced_desc)
+            paused -> getString(R.string.status_desc_paused, pauseRemainingSec)
             isDiagnostic -> getString(R.string.notification_desc_test)
             type == NetworkType.CELLULAR -> getString(R.string.status_desc_cellular, formattedLimit).replace("\n", " ")
             type == NetworkType.WIFI -> getString(R.string.status_desc_wifi).replace("\n", " ")
@@ -345,6 +416,7 @@ class BandwidthControlService : Service() {
 
         val color = when {
             notEnforced -> Color.parseColor("#DC2626") // Red
+            paused -> Color.parseColor("#DC2626") // Red: limit currently off
             isDiagnostic -> Color.parseColor("#00E5FF") // Cyan
             type == NetworkType.CELLULAR -> Color.parseColor("#2563EB") // Blue
             type == NetworkType.WIFI -> Color.parseColor("#0288D1") // Light Blue
@@ -363,6 +435,19 @@ class BandwidthControlService : Service() {
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            // Pause toggle: offered while a cellular throttle is active, and
+            // (as "resume") while the pause window is open. Not offered during
+            // a diagnostic test — the pause path ignores it anyway.
+            .apply {
+                if (paused || (type == NetworkType.CELLULAR && !isDiagnostic)) {
+                    addAction(
+                        R.drawable.ic_stat_speed,
+                        getString(if (paused) R.string.notification_action_resume
+                                 else R.string.notification_action_pause_1min),
+                        pausePendingIntent
+                    )
+                }
+            }
             .addAction(
                 R.drawable.ic_stat_stop,
                 getString(R.string.notification_action_stop),

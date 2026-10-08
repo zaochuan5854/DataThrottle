@@ -24,6 +24,10 @@
     <string name="notification_desc_wifi">Connected to Wi-Fi. Full bandwidth available without throttling.</string>
     <string name="notification_desc_test">Running 100 kbps stream speed test.</string>
     <string name="notification_action_stop">Stop Service</string>
+    <string name="notification_action_pause_1min">Pause 1 min</string>
+    <string name="notification_action_resume">Enable limit</string>
+    <string name="status_paused">Limit disabled</string>
+    <string name="status_desc_paused">The limit is temporarily disabled (%1$d s remaining)</string>
 
     <!-- Status & Home UI -->
     <string name="status_cellular">Cellular</string>
@@ -80,9 +84,8 @@
     <string name="btn_start_test">Start 100 kbps Test</string>
     <string name="btn_cancel_test">Cancel Test</string>
     <string name="test_howto_title">About test behavior</string>
-    <string name="test_howto_line1">Right after start, the image is downloaded without any limit. This is the limiter\'s initial allowance and is normal behavior.</string>
-    <string name="test_howto_line2">Once it is used up, the 100 kbps limit applies and progress continues steadily.</string>
-    <string name="test_howto_line3">The test verifies, from the overall speed including the fast segment, that the limiter is working correctly.</string>
+    <string name="test_howto_line1">Right after the test starts, the download runs without any limit; this is normal behavior.</string>
+    <string name="test_howto_line2">The test confirms the limiter works correctly from the overall speed, including both the fast and slow segments.</string>
     <string name="test_running">Streaming at 100 kbps...</string>
     <string name="test_speed_format">Speed: %.0f kbps</string>
     <string name="test_report_title">Test Complete</string>

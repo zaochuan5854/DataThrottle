@@ -9,7 +9,7 @@
     <color name="white">#FFFFFFFF</color>
 
     <!-- App Icon Colors (Light Mode: White Background, Orange Accent) -->
-    <color name="ic_launcher_background">#FFFFFFFF</color>
+    <color name="ic_launcher_background">#FF155CC0</color>
     <color name="ic_launcher_accent">#FFF6821F</color>
 
     <!-- Window Background (Light Mode) -->
