@@ -52,6 +52,7 @@ data class TestState(
     val imageBitmap: ImageBitmap? = null,
     val usingLocalAsset: Boolean = false,
     val partialImage: Boolean = false,
+    val imageAspectRatio: Float = 0f,
     val shapingExemptTransport: Boolean = false,
     val errorMessage: String? = null
 )
@@ -101,6 +102,9 @@ class StreamTestEngine(
         private const val UI_UPDATE_INTERVAL_MS = 100L
         private const val MAX_TEST_DURATION_MS = 90_000L
         private const val MIN_BYTES_FOR_REGION = 2048L
+
+        /** Prefix size enough to carry the JPEG SOF header for aspect probing. */
+        private const val ASPECT_PROBE_BYTES = 32 * 1024L
 
         // Bytes transferred before this are assumed to ride the token-bucket
         // burst (E7 control: burst drains in well under a second at full
@@ -279,6 +283,7 @@ class StreamTestEngine(
         var magicChecked = false
         val burstWindow = BurstWindow()
         val watermark = WriteWatermarkProbe(dest)
+        var imageAspect = 0f
 
         while (true) {
             delay(UI_UPDATE_INTERVAL_MS)
@@ -339,7 +344,13 @@ class StreamTestEngine(
                         .coerceIn(0f, 1f)
                 } else 0f
 
-                if (visibleBytes - lastRegionAt >= (targetTotal / 20).coerceAtLeast(MIN_BYTES_FOR_REGION)) {
+                if (imageAspect <= 0f && visibleBytes >= MIN_BYTES_FOR_REGION) {
+                    imageAspect = imageAspectFrom(
+                        readDelimitedBytes(dest, minOf(visibleBytes, ASPECT_PROBE_BYTES))
+                    ) ?: 0f
+                }
+
+                if (visibleBytes - lastRegionAt >= (targetTotal / 50).coerceAtLeast(MIN_BYTES_FOR_REGION)) {
                     lastRegionAt = visibleBytes
                     bandBitmap =
                         decodeBandFrom(readDelimitedBytes(dest, visibleBytes), progress) ?: bandBitmap
@@ -360,6 +371,7 @@ class StreamTestEngine(
                     averageSpeedKbps = avgKbps,
                     imageBitmap = bandBitmap,
                     partialImage = true,
+                    imageAspectRatio = imageAspect,
                     shapingExemptTransport = false
                 )
                 lastUiNanos = now
@@ -403,6 +415,8 @@ class StreamTestEngine(
             isThrottlingVerified = verified,
             imageBitmap = full,
             partialImage = false,
+            imageAspectRatio =
+                if (imageAspect > 0f) imageAspect else full.width.toFloat() / full.height.toFloat(),
             shapingExemptTransport = false
         )
         _testState.value = finalState
@@ -463,6 +477,7 @@ class StreamTestEngine(
             var bandBitmap: ImageBitmap? = null
             var endedByDeadline = false
             val burstWindow = BurstWindow()
+            var imageAspect = 0f
 
             while (true) {
                 val read = input.read(buffer)
@@ -506,7 +521,14 @@ class StreamTestEngine(
                         (elapsedMs.toFloat() / MAX_TEST_DURATION_MS).coerceIn(0f, 1f)
                     }
 
-                    if (totalRead - lastRegionAt >= (targetTotal / 20).coerceAtLeast(MIN_BYTES_FOR_REGION)) {
+                    if (imageAspect <= 0f && accumulator.size() >= MIN_BYTES_FOR_REGION) {
+                        imageAspect = imageAspectFrom(
+                            accumulator.toByteArray()
+                                .copyOf(minOf(accumulator.size().toLong(), ASPECT_PROBE_BYTES).toInt())
+                        ) ?: 0f
+                    }
+
+                    if (totalRead - lastRegionAt >= (targetTotal / 50).coerceAtLeast(MIN_BYTES_FOR_REGION)) {
                         lastRegionAt = totalRead
                         bandBitmap = decodeBandFrom(accumulator.toByteArray(), progress) ?: bandBitmap
                     }
@@ -521,6 +543,7 @@ class StreamTestEngine(
                         averageSpeedKbps = avgKbps,
                         imageBitmap = bandBitmap,
                         partialImage = true,
+                        imageAspectRatio = imageAspect,
                         shapingExemptTransport = false
                     )
                     lastUiNanos = now
@@ -565,6 +588,8 @@ class StreamTestEngine(
                 isThrottlingVerified = verified,
                 imageBitmap = full,
                 partialImage = false,
+                imageAspectRatio =
+                    if (imageAspect > 0f) imageAspect else full.width.toFloat() / full.height.toFloat(),
                 shapingExemptTransport = false
             )
             _testState.value = finalState
@@ -607,6 +632,22 @@ class StreamTestEngine(
      * missing or the decoder cannot read the partial data (E3b degradation
      * path: the measurement keeps running, visualization starts later).
      */
+    /**
+     * Exact full-image aspect from the JPEG SOF header of any prefix that
+     * contains it — stable from the first few KB, independent of band decode
+     * progress, so the display placeholder can reserve the image's exact
+     * box before pixels arrive.
+     */
+    private fun imageAspectFrom(data: ByteArray): Float? {
+        return runCatching {
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(data, 0, data.size, opts)
+            if (opts.outWidth > 0 && opts.outHeight > 0) {
+                opts.outWidth.toFloat() / opts.outHeight.toFloat()
+            } else null
+        }.getOrNull()
+    }
+
     private fun decodeBandFrom(data: ByteArray, progress: Float): ImageBitmap? {
         if (data.size < MIN_BYTES_FOR_REGION) return null
         return runCatching {
@@ -742,6 +783,8 @@ class StreamTestEngine(
             targetKbps = targetKbps,
             isThrottlingVerified = if (completed) verified && !stream.usingLocalAsset else null,
             imageBitmap = decoded,
+            imageAspectRatio = decoded?.let { it.width.toFloat() / it.height.toFloat() }
+                ?: _testState.value.imageAspectRatio,
             shapingExemptTransport = true,
             errorMessage = if (endedByDeadline && decoded == null) {
                 "Timed out before the stream completed"

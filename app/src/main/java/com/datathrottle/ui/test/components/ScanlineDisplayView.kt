@@ -31,10 +31,18 @@ fun ScanlineDisplayView(
     val bitmap = state.imageBitmap
     val progress = state.progress
 
+    // The placeholder reserves the *exact* box of the test image: fit-width
+    // then fixes the scale once and for all, so band updates only move the
+    // band's bottom edge — no rescale jitter (S3-12 follow-up). The engine
+    // publishes the real aspect from the JPEG SOF header as soon as the
+    // first KB of the transfer arrive; the constant below only covers the
+    // idle placeholder.
+    val imageAspect = if (state.imageAspectRatio > 0f) state.imageAspectRatio else TEST_IMAGE_ASPECT
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(200.dp)
+            .aspectRatio(imageAspect)
             .clip(RoundedCornerShape(12.dp))
             .background(Color(0xFF0F141C))
             .border(1.dp, Color(0xFF263238), RoundedCornerShape(12.dp))
@@ -58,38 +66,26 @@ fun ScanlineDisplayView(
 
             // Draw image clipped to progress
             if (bitmap != null && progress > 0f) {
-                // A partial decode is a top band (full width × progress rows).
-                // Recover the full-image aspect from it and anchor the band to
-                // the top edge, so the reveal grows top-to-bottom like a real
-                // scanline — fit-centering the band itself made it look like
-                // the middle of the image was rendering outwards.
-                val partial = state.partialImage
-                val fullWidth = bitmap.width
-                val fullHeight = if (partial && progress > 0f) {
-                    (bitmap.height / progress).toInt().coerceAtLeast(bitmap.height)
-                } else bitmap.height
-
-                val scale = minOf(
-                    canvasWidth / fullWidth.toFloat(),
-                    canvasHeight / fullHeight.toFloat()
-                )
-                val dstWidth = fullWidth * scale
-                val fullDstHeight = fullHeight * scale
-                val bandDstHeight = if (partial) fullDstHeight * progress else fullDstHeight
-                val dstX = (canvasWidth - dstWidth) / 2f
-                val dstY = if (partial) 0f else (canvasHeight - fullDstHeight) / 2f
+                // BoxFit.fitWidth + Alignment.TopCenter semantics: always draw
+                // at canvasWidth / fullWidth scale, anchored to the top edge.
+                // A partial decode is the image's top rows, so the reveal
+                // grows strictly top-to-bottom at a scale that NEVER changes
+                // between band updates (the previous full-height estimate
+                // from progress re-scaled every band and produced the jitter).
+                val scale = canvasWidth / bitmap.width.toFloat()
+                val bandDstHeight = (bitmap.height * scale).coerceAtMost(canvasHeight)
 
                 drawImage(
                     image = bitmap,
                     srcOffset = IntOffset.Zero,
                     srcSize = IntSize(bitmap.width, bitmap.height),
-                    dstOffset = IntOffset(dstX.toInt(), dstY.toInt()),
-                    dstSize = IntSize(dstWidth.toInt(), bandDstHeight.toInt())
+                    dstOffset = IntOffset.Zero,
+                    dstSize = IntSize(canvasWidth.toInt(), bandDstHeight.toInt())
                 )
 
                 // Draw Scanline Laser Beam riding the band's bottom edge
                 if (progress < 1.0f) {
-                    val laserY = dstY + bandDstHeight
+                    val laserY = bandDstHeight
                     // Glow beam
                     drawLine(
                         color = Color(0x6600E5FF),
@@ -158,3 +154,8 @@ fun ScanlineDisplayView(
         }
     }
 }
+
+// Stored dimensions of DEFAULT_TEST_IMAGE_URL (3387×2282 landscape JPEG, no
+// EXIF rotation) — only the idle placeholder needs it; once the transfer
+// starts the engine publishes the real aspect from the SOF header.
+private const val TEST_IMAGE_ASPECT = 3387f / 2282f
