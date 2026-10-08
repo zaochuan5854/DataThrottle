@@ -21,6 +21,10 @@ import com.datathrottle.R
 import com.datathrottle.core.BandwidthController
 import com.datathrottle.core.NetworkMonitor
 import com.datathrottle.core.NetworkType
+import com.datathrottle.core.PauseActionLabel
+import com.datathrottle.core.PauseWindow
+import com.datathrottle.core.ThrottleLimit
+import com.datathrottle.core.ThrottleNoticeFactory
 import com.datathrottle.core.formatMbps
 import com.datathrottle.data.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
@@ -59,17 +63,22 @@ class BandwidthControlService : Service() {
     private var lastAppliedLimit: Long? = null
     private var lastAppliedType: NetworkType? = null
 
-    // Notification-driven 60 s unlimit (toggle). Volatile: written on the
-    // service scope, read when (re)building the notification on the main thread.
-    @Volatile private var paused = false
-    @Volatile private var pauseRemainingSec = 0
+    // Notification-driven unlimit window (toggle). The contract lives in
+    // PauseWindow so the countdown/teardown races are unit tested.
+    private val pauseWindow = PauseWindow(PAUSE_MS)
     private var pauseJob: Job? = null
+
+    private val isPauseActive: Boolean get() = pauseWindow.isActive
 
     companion object {
         private const val TAG = "BandwidthControlService"
-        private const val UNLIMITED = -1L
         private const val TEARDOWN_TIMEOUT_MS = 1500L
-        const val MBPS_TO_BYTES_PER_SECOND = 125000L
+
+        /** Countdown refresh cadence of the pause notice. */
+        private const val PAUSE_TICK_MS = 1_000L
+
+        /** Kept for callers outside the service; the value now lives in [ThrottleLimit]. */
+        const val MBPS_TO_BYTES_PER_SECOND = ThrottleLimit.MBPS_TO_BYTES_PER_SECOND
 
         const val ACTION_STOP_SERVICE = "com.datathrottle.STOP_SERVICE"
         const val ACTION_SET_DIAGNOSTIC = "com.datathrottle.SET_DIAGNOSTIC"
@@ -227,14 +236,12 @@ class BandwidthControlService : Service() {
     }
 
     private fun applyAppropriateLimit(limitMbps: Float, networkType: NetworkType) {
-        val limit = when {
-            // A running diagnostic owns the cap: a test must never measure an
-            // unthrottled download, so the pause window yields to it (S2-16).
-            diagnosticLimit != null -> diagnosticLimit!!
-            paused -> UNLIMITED
-            networkType == NetworkType.CELLULAR -> (limitMbps * MBPS_TO_BYTES_PER_SECOND).toLong()
-            else -> UNLIMITED
-        }
+        val limit = ThrottleLimit.resolve(
+            diagnosticBytes = diagnosticLimit,
+            paused = isPauseActive,
+            networkType = networkType,
+            limitMbps = limitMbps
+        )
 
         val hasStateChanged = (lastAppliedLimit != null) && (limit != lastAppliedLimit || networkType != lastAppliedType)
         lastAppliedLimit = limit
@@ -258,7 +265,7 @@ class BandwidthControlService : Service() {
         // The notification's speed text reflects the bytes actually applied to the
         // kernel (S2-13): during rapid limit changes the config parameter and the
         // last successful write could otherwise disagree in the displayed notice.
-        val appliedMbps = if (enforced && limit > 0) limit.toFloat() / MBPS_TO_BYTES_PER_SECOND else limitMbps
+        val appliedMbps = ThrottleLimit.appliedMbps(limit, enforced, limitMbps)
         updateNotification(networkType, diagnosticLimit != null, appliedMbps, shouldAlert = hasStateChanged, notEnforced = !enforced)
     }
 
@@ -274,42 +281,41 @@ class BandwidthControlService : Service() {
         }
         pauseJob?.cancel()
         pauseJob = null
-        if (!paused) {
-            paused = true
+        if (!isPauseActive) {
+            val token = pauseWindow.start()
             _isPaused.value = true
-            pauseRemainingSec = (PAUSE_MS / 1000L).toInt()
-            Log.d(TAG, "Throttle paused for ${PAUSE_MS / 1000} s")
+            Log.d(TAG, "Throttle paused for ${pauseWindow.durationSeconds} s")
             pauseJob = serviceScope.launch {
-                val m = settingsRepository.bandwidthLimitMbps.first()
-                applyAppropriateLimit(m, networkMonitor.networkType.value)
-                // Refresh the notification once per second with the live
-                // remaining-seconds countdown until the window elapses.
-                val t0 = System.currentTimeMillis()
-                while (true) {
-                    delay(1000)
-                    val remaining = ((PAUSE_MS - (System.currentTimeMillis() - t0)) / 1000L).toInt()
-                    if (remaining <= 0) break
-                    pauseRemainingSec = remaining
-                    updateNotification(networkMonitor.networkType.value,
+                val configured = settingsRepository.bandwidthLimitMbps.first()
+                applyAppropriateLimit(configured, networkMonitor.networkType.value)
+                // Countdown: refresh the notification every PAUSE_TICK_MS so the
+                // remaining seconds stay live while the window is open.
+                while (!pauseWindow.isElapsed()) {
+                    delay(PAUSE_TICK_MS)
+                    if (!pauseWindow.isCurrent(token)) return@launch
+                    updateNotification(
+                        networkMonitor.networkType.value,
                         isDiagnostic = diagnosticLimit != null,
-                        limitMbps = currentLimitMbps)
+                        limitMbps = currentLimitMbps
+                    )
                 }
-                pauseRemainingSec = 0
-                paused = false
+                // S1-16: teardown (or an early resume) invalidates the token, so
+                // an interrupted window never re-applies a cap behind a service
+                // that has already reset itself to unlimited.
+                if (!pauseWindow.isCurrent(token)) return@launch
+                pauseWindow.stop()
                 _isPaused.value = false
-                pauseJob = null
                 Log.d(TAG, "Pause window elapsed: resuming throttle")
-                val m2 = settingsRepository.bandwidthLimitMbps.first()
-                applyAppropriateLimit(m2, networkMonitor.networkType.value)
+                val latest = settingsRepository.bandwidthLimitMbps.first()
+                applyAppropriateLimit(latest, networkMonitor.networkType.value)
             }
         } else {
-            paused = false
+            pauseWindow.stop()
             _isPaused.value = false
-            pauseRemainingSec = 0
             Log.d(TAG, "Pause cancelled early: resuming throttle now")
             serviceScope.launch {
-                val m = settingsRepository.bandwidthLimitMbps.first()
-                applyAppropriateLimit(m, networkMonitor.networkType.value)
+                val configured = settingsRepository.bandwidthLimitMbps.first()
+                applyAppropriateLimit(configured, networkMonitor.networkType.value)
             }
         }
     }
@@ -322,9 +328,8 @@ class BandwidthControlService : Service() {
     private fun cancelPauseWindow() {
         pauseJob?.cancel()
         pauseJob = null
-        paused = false
+        pauseWindow.stop()
         _isPaused.value = false
-        pauseRemainingSec = 0
     }
 
     private fun showPermissionErrorNotification() {
@@ -423,32 +428,21 @@ class BandwidthControlService : Service() {
 
         val formattedLimit = formatMbps(limitMbps)
 
-        val title = when {
-            notEnforced -> getString(R.string.status_not_enforced)
-            paused -> getString(R.string.status_paused)
-            isDiagnostic -> getString(R.string.test_running)
-            type == NetworkType.CELLULAR -> getString(R.string.status_limited_to, formattedLimit)
-            type == NetworkType.WIFI -> getString(R.string.status_unlimited_wifi)
-            else -> getString(R.string.status_unlimited)
-        }
-
-        val desc = when {
-            notEnforced -> getString(R.string.status_not_enforced_desc)
-            paused -> getString(R.string.status_desc_paused, pauseRemainingSec)
-            isDiagnostic -> getString(R.string.notification_desc_test)
-            type == NetworkType.CELLULAR -> getString(R.string.status_desc_cellular, formattedLimit).replace("\n", " ")
-            type == NetworkType.WIFI -> getString(R.string.status_desc_wifi).replace("\n", " ")
-            else -> getString(R.string.status_desc_disabled).replace("\n", " ")
-        }
-
-        val color = when {
-            notEnforced -> Color.parseColor("#DC2626") // Red
-            paused -> Color.parseColor("#DC2626") // Red: limit currently off
-            isDiagnostic -> Color.parseColor("#00E5FF") // Cyan
-            type == NetworkType.CELLULAR -> Color.parseColor("#2563EB") // Blue
-            type == NetworkType.WIFI -> Color.parseColor("#0288D1") // Light Blue
-            else -> Color.parseColor("#757575") // Grey
-        }
+        // State -> copy matrix lives in ThrottleNoticeFactory (unit tested).
+        val notice = ThrottleNoticeFactory.build(
+            type = type,
+            isDiagnostic = isDiagnostic,
+            paused = isPauseActive,
+            pauseRemainingSec = pauseWindow.remainingSeconds(),
+            limitLabel = formattedLimit,
+            notEnforced = notEnforced
+        )
+        val title = getString(notice.titleRes, *notice.titleArgs.toTypedArray())
+        // The status strings carry a newline for the in-app status line; the
+        // notification is single line.
+        val desc = getString(notice.bodyRes, *notice.bodyArgs.toTypedArray())
+            .replace("\n", " ")
+        val color = notice.accentColor
 
         val defaultSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
@@ -466,13 +460,13 @@ class BandwidthControlService : Service() {
             // (as "resume") while the pause window is open. Not offered during
             // a diagnostic test — the pause path ignores it anyway.
             .apply {
-                if (paused || (type == NetworkType.CELLULAR && !isDiagnostic)) {
-                    addAction(
-                        R.drawable.ic_stat_speed,
-                        getString(if (paused) R.string.notification_action_resume
-                                 else R.string.notification_action_pause_1min),
-                        pausePendingIntent
-                    )
+                val labelRes = when (notice.pauseActionLabel) {
+                    PauseActionLabel.PAUSE_ONE_MINUTE -> R.string.notification_action_pause_1min
+                    PauseActionLabel.RESUME_NOW -> R.string.notification_action_resume
+                    PauseActionLabel.NONE -> null
+                }
+                if (labelRes != null) {
+                    addAction(R.drawable.ic_stat_speed, getString(labelRes), pausePendingIntent)
                 }
             }
             .addAction(
@@ -524,7 +518,7 @@ class BandwidthControlService : Service() {
         // DataStore bookkeeping is best-effort on a detached scope: if the write
         // races with process death, launch-time reconciliation clears the residual.
         GlobalScope.launch(Dispatchers.IO + NonCancellable) {
-            settingsRepository.setLastAppliedLimitBytes(UNLIMITED)
+            settingsRepository.setLastAppliedLimitBytes(ThrottleLimit.UNLIMITED)
             settingsRepository.setServiceEnabled(false)
         }
         ThrottleTileService.requestTileUpdate(this)
@@ -542,7 +536,7 @@ class BandwidthControlService : Service() {
         // Synchronous teardown: the reset must land before process death (S1-06).
         teardownSynchronously()
         GlobalScope.launch(Dispatchers.IO + NonCancellable) {
-            settingsRepository.setLastAppliedLimitBytes(UNLIMITED)
+            settingsRepository.setLastAppliedLimitBytes(ThrottleLimit.UNLIMITED)
             settingsRepository.setServiceEnabled(false)
         }
         ThrottleTileService.requestTileUpdate(this)

@@ -20,6 +20,7 @@ import com.datathrottle.core.NetworkType
 import com.datathrottle.core.ShizukuManager
 import com.datathrottle.core.ShizukuStatus
 import com.datathrottle.core.StreamTestEngine
+import com.datathrottle.core.TestLaunchPolicy
 import com.datathrottle.data.AppTheme
 import com.datathrottle.data.SettingsRepository
 import com.datathrottle.service.BandwidthControlService
@@ -262,7 +263,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // S2-17: a second tap while a run (or its cap-confirm poll) is in flight
         // would start a competing poll -> competing engine run -> competing
         // completion callbacks. One at a time.
-        if (_isDiagnosticRunning.value) {
+        if (TestLaunchPolicy.ignoreStart(_isDiagnosticRunning.value)) {
             Log.w(TAG, "start100KbpsTest ignored: a run is already in flight")
             return
         }
@@ -283,14 +284,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _showTestError.value = false
 
         val resetIntent = Intent(context, BandwidthControlService::class.java).apply {
-            action = if (serviceWasRunning) {
-                BandwidthControlService.ACTION_SET_DIAGNOSTIC
-            } else {
+            when (TestLaunchPolicy.teardownFor(serviceWasRunning)) {
+                TestLaunchPolicy.Teardown.RESET_DIAGNOSTIC_CAP -> {
+                    action = BandwidthControlService.ACTION_SET_DIAGNOSTIC
+                    putExtra(BandwidthControlService.EXTRA_LIMIT_BYTES, -1L)
+                }
                 // No service to reset: stop the one the test created (S1-03 pattern).
-                BandwidthControlService.ACTION_STOP_SERVICE
-            }
-            if (serviceWasRunning) {
-                putExtra(BandwidthControlService.EXTRA_LIMIT_BYTES, -1L)
+                TestLaunchPolicy.Teardown.STOP_SERVICE ->
+                    action = BandwidthControlService.ACTION_STOP_SERVICE
             }
         }
 
@@ -354,11 +355,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // already running, otherwise stop the instance the test created instead
         // of silently leaving throttling enabled.
         val resetIntent = Intent(context, BandwidthControlService::class.java).apply {
-            if (diagnosticServiceWasRunning) {
-                action = BandwidthControlService.ACTION_SET_DIAGNOSTIC
-                putExtra(BandwidthControlService.EXTRA_LIMIT_BYTES, -1L)
-            } else {
-                action = BandwidthControlService.ACTION_STOP_SERVICE
+            when (TestLaunchPolicy.teardownFor(diagnosticServiceWasRunning)) {
+                TestLaunchPolicy.Teardown.RESET_DIAGNOSTIC_CAP -> {
+                    action = BandwidthControlService.ACTION_SET_DIAGNOSTIC
+                    putExtra(BandwidthControlService.EXTRA_LIMIT_BYTES, -1L)
+                }
+                TestLaunchPolicy.Teardown.STOP_SERVICE ->
+                    action = BandwidthControlService.ACTION_STOP_SERVICE
             }
         }
         runCatching { ContextCompat.startForegroundService(context, resetIntent) }
